@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0c0a09" />
+    <meta name="description" content="Shoot the gates, grow your squad, survive the horde." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Horde: Last Stand</title>
+  </head>
+  <body
+    class="h-dvh overflow-hidden overscroll-none bg-stone-950 font-sans text-stone-50 antialiased"
+  >
+    <main
+      id="app"
+      class="relative mx-auto h-full w-full max-w-[520px] touch-none overflow-hidden select-none"
+    >
+      <canvas id="game" class="absolute inset-0 block h-full w-full"></canvas>
+
+      <!-- HUD -->
+      <div
+        id="hud"
+        class="pointer-events-none absolute inset-x-0 top-0 hidden px-4 pt-[max(env(safe-area-inset-top),12px)]"
+      >
+        <div
+          class="flex items-center gap-3 rounded-full bg-black/55 px-4 py-2 ring-1 ring-white/10 backdrop-blur-sm"
+        >
+          <span class="text-xs font-black tracking-widest text-amber-400 uppercase">Lvl 1</span>
+          <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
+            <div id="hud-progress" class="h-full w-0 rounded-full bg-amber-400"></div>
+          </div>
+          <span class="text-sm font-black tabular-nums">
+            <span id="hud-kills">0</span>
+            <span class="text-xs text-stone-400">kills</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Wave banner -->
+      <div
+        id="banner"
+        class="pointer-events-none absolute inset-x-0 top-1/3 text-center text-5xl font-black tracking-tight uppercase italic opacity-0 drop-shadow-[0_4px_0_rgba(0,0,0,0.6)]"
+      ></div>
+
+      <!-- Start screen -->
+      <section
+        id="screen-start"
+        class="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-stone-950/70 px-8 text-center backdrop-blur-sm"
+      >
+        <div>
+          <p class="text-sm font-black tracking-[0.3em] text-lime-400 uppercase">
+            Level 1 · Outbreak
+          </p>
+          <h1 class="mt-2 text-6xl leading-none font-black tracking-tight uppercase italic">
+            Horde<br /><span class="text-amber-400">Last Stand</span>
+          </h1>
+        </div>
+        <ul class="space-y-2 text-sm text-stone-300">
+          <li>👆 Drag to move your squad</li>
+          <li>
+            <span class="font-black text-blue-400">Blue</span> gates grow it,
+            <span class="font-black text-red-400">red</span> gates shrink it
+          </li>
+          <li>Shoot gates to raise their number</li>
+          <li>Break crates for upgrades</li>
+        </ul>
+        <button
+          data-action="start"
+          class="pointer-events-auto rounded-2xl bg-amber-400 px-10 py-4 text-2xl font-black text-stone-950 uppercase shadow-[0_6px_0_#b45309] transition active:translate-y-1 active:shadow-[0_2px_0_#b45309]"
+        >
+          Play
+        </button>
+      </section>
+
+      <!-- End screen -->
+      <section
+        id="screen-end"
+        class="absolute inset-0 hidden flex-col items-center justify-center gap-6 bg-stone-950/75 px-8 text-center backdrop-blur-sm"
+      >
+        <h2 id="end-title" class="text-6xl font-black tracking-tight uppercase italic"></h2>
+        <p id="end-subtitle" class="text-stone-300"></p>
+        <dl class="grid w-full max-w-xs grid-cols-3 gap-2">
+          <div class="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+            <dt class="text-[10px] font-bold tracking-widest text-stone-400 uppercase">Kills</dt>
+            <dd id="stat-kills" class="text-2xl font-black tabular-nums"></dd>
+          </div>
+          <div class="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+            <dt class="text-[10px] font-bold tracking-widest text-stone-400 uppercase">Peak</dt>
+            <dd id="stat-peak" class="text-2xl font-black tabular-nums"></dd>
+          </div>
+          <div class="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+            <dt class="text-[10px] font-bold tracking-widest text-stone-400 uppercase">Time</dt>
+            <dd id="stat-time" class="text-2xl font-black tabular-nums"></dd>
+          </div>
+        </dl>
+        <button
+          data-action="start"
+          class="pointer-events-auto rounded-2xl bg-amber-400 px-10 py-4 text-2xl font-black text-stone-950 uppercase shadow-[0_6px_0_#b45309] transition active:translate-y-1 active:shadow-[0_2px_0_#b45309]"
+        >
+          Play again
+        </button>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
