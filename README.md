@@ -42,8 +42,8 @@ src/
 ## Tuning
 
 Balance changes go in `src/game/tuning.ts` (global numbers) and `src/levels/level1.ts` (what spawns
-and when). `npm test` runs two headless playthroughs: a bot that picks the better gate must win, and a
-player who never moves must lose.
+and when). `npm test` runs two headless playthroughs: a bot that picks the better gate and lines up on crates must win, and a
+player who never moves must be overrun within 30 seconds.
 
 ## Deploy
 

@@ -33,7 +33,7 @@ export interface Crate {
   dead: boolean;
 }
 
-export type ZombieKind = 'walker' | 'brute';
+export type ZombieKind = 'runner' | 'walker' | 'bloater' | 'brute';
 
 export interface Zombie {
   kind: ZombieKind;
@@ -46,6 +46,8 @@ export interface Zombie {
   damage: number;
   phase: number;
   flash: number;
+  /** Clothing colour, picked at spawn for variety. */
+  shirt: string;
   dead: boolean;
 }
 
@@ -79,6 +81,18 @@ export interface Squad {
   damageLevel: number;
   spreadLevel: number;
   flash: number;
+  /** Seconds left on the muzzle-flash sprite. */
+  muzzle: number;
+}
+
+/** Persistent ground stain (blood, bile) that scrolls with the road. */
+export interface Decal {
+  x: number;
+  y: number;
+  color: string;
+  /** Irregular outline as radii around the centre. */
+  shape: number[];
+  rotation: number;
 }
 
 export interface Vec2 {

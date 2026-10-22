@@ -35,12 +35,10 @@ export class Overlay {
       const won = status === 'won';
       const title = byId('end-title');
       title.textContent = won ? 'Survived!' : 'Overrun';
-      title.className = `text-6xl font-black tracking-tight uppercase italic ${
-        won ? 'text-lime-400' : 'text-red-500'
-      }`;
+      title.className = `font-display text-6xl uppercase ${won ? 'text-amber-500' : 'text-red-700'}`;
       byId('end-subtitle').textContent = won
-        ? 'The abomination is down. Level 1 cleared.'
-        : 'The horde got through. Shoot the gates and try again.';
+        ? 'The abomination is down. The road is yours, for now.'
+        : 'The horde broke through. Grow the squad faster and keep moving.';
       byId('stat-kills').textContent = String(stats.kills);
       byId('stat-peak').textContent = String(stats.peakUnits);
       byId('stat-time').textContent = `${Math.round(stats.time)}s`;
@@ -49,7 +47,7 @@ export class Overlay {
 
   showBanner(text: string): void {
     this.banner.textContent = text;
-    this.banner.classList.toggle('text-red-500', text === 'BOSS');
+    this.banner.classList.toggle('text-red-600', text === 'BOSS');
     this.banner.classList.remove('animate-banner');
     void this.banner.offsetWidth; // restart the animation
     this.banner.classList.add('animate-banner');

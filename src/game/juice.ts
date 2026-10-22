@@ -53,6 +53,21 @@ export class Juice {
     }
   }
 
+  /** A spent shell flicked out to the side of the squad. */
+  casing(x: number, y: number, color: string): void {
+    const life = 0.3 + this.rng() * 0.2;
+    this.particles.push({
+      x,
+      y,
+      vx: 70 + this.rng() * 70,
+      vy: -30 + this.rng() * 50,
+      life,
+      maxLife: life,
+      size: 2,
+      color,
+    });
+  }
+
   float(x: number, y: number, text: string, color: string, size = 18): void {
     this.texts.push({ x, y, text, color, size, life: 1, maxLife: 1 });
   }

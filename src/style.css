@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 
+@theme {
+  --font-display: 'Black Ops One', Impact, 'Arial Black', sans-serif;
+}
+
 @keyframes banner-pop {
   0% {
     opacity: 0;
@@ -21,4 +25,11 @@
 
 @utility animate-banner {
   animation: banner-pop 1.6s ease-out forwards;
+}
+
+/* Grimy backdrop for menu screens: vignette plus a faint scanline texture. */
+@utility bg-grime {
+  background:
+    radial-gradient(ellipse at 50% 40%, rgb(20 16 12 / 0.78), rgb(5 4 3 / 0.96) 75%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.015) 0 1px, transparent 1px 3px);
 }

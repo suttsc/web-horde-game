@@ -1,4 +1,4 @@
-import type { LevelDefinition, LevelEvent } from '../levels/types';
+import type { LevelDefinition, LevelEvent, StreamPhase, ZombieMix } from '../levels/types';
 import { formationOffsets, formationRadius } from './formation';
 import { applyGate, chargeGate, gateLabel, isBeneficial } from './gates';
 import { Juice } from './juice';
@@ -10,6 +10,7 @@ import {
   CRATE,
   GATE,
   JUICE,
+  MAX_DECALS,
   MAX_VIEW_HEIGHT,
   MIN_VIEW_HEIGHT,
   ROAD_CENTER,
@@ -20,11 +21,13 @@ import {
   UPGRADE_CAPS,
   WEAPON,
   ZOMBIE,
+  ZOMBIE_KINDS,
 } from './tuning';
 import type {
   Boss,
   Bullet,
   Crate,
+  Decal,
   Gate,
   GatePair,
   GateSpec,
@@ -68,6 +71,7 @@ export class Game {
   crates: Crate[] = [];
   gates: GatePair[] = [];
   boss: Boss | null = null;
+  decals: Decal[] = [];
   stats: GameStats = { kills: 0, peakUnits: 0, time: 0 };
 
   juice: Juice;
@@ -75,6 +79,8 @@ export class Game {
 
   private rng: Rng;
   private eventIndex = 0;
+  /** Fractional zombies owed by the continuous stream. */
+  private streamDebt = 0;
   private slowMo = 0;
   private endTimer = 0;
   private pendingStatus: GameStatus | null = null;
@@ -127,6 +133,7 @@ export class Game {
       damageLevel: 0,
       spreadLevel: 0,
       flash: 0,
+      muzzle: 0,
     };
     this.formation = formationOffsets(SQUAD.maxRendered, SQUAD.spacing);
     this.bullets = [];
@@ -134,8 +141,10 @@ export class Game {
     this.crates = [];
     this.gates = [];
     this.boss = null;
+    this.decals = [];
     this.elapsed = 0;
     this.eventIndex = 0;
+    this.streamDebt = 0;
     this.slowMo = 0;
     this.endTimer = 0;
     this.pendingStatus = null;
@@ -154,6 +163,8 @@ export class Game {
     this.elapsed += dt;
 
     this.runTimeline();
+    this.runStream(dt);
+    this.updateDecals(dt);
     this.updateSquad(dt, steer, keyAxis);
     this.updateBullets(dt);
     this.updateGates(dt);
@@ -214,7 +225,7 @@ export class Game {
         });
         break;
       case 'horde':
-        this.spawnHorde(event.count, event.hp, event.kind ?? 'walker', event.x, event.spread);
+        this.spawnHorde(event.count, event.hp, event.mix ?? { walker: 1 }, event.x, event.spread);
         break;
       case 'boss':
         this.boss = {
@@ -251,31 +262,81 @@ export class Game {
   private spawnHorde(
     count: number,
     hp: number,
-    kind: ZombieKind,
+    mix: ZombieMix,
     x = ROAD_CENTER,
     spread = 200,
   ): void {
-    const stats = ZOMBIE[kind];
-    const perRow = Math.max(1, Math.floor(spread / (stats.radius * 2.6)));
+    const perRow = Math.max(1, Math.floor(spread / 26));
     for (let i = 0; i < count; i++) {
       const row = Math.floor(i / perRow);
-      this.zombies.push({
-        kind,
-        x: clamp(
-          x + range(this.rng, -spread / 2, spread / 2),
-          ROAD_LEFT + stats.radius,
-          ROAD_RIGHT - stats.radius,
-        ),
-        y: -stats.radius - row * (ZOMBIE.rowGap + stats.radius) - this.rng() * 10,
-        r: stats.radius,
-        hp,
-        maxHp: hp,
-        speed: stats.speed * range(this.rng, 0.85, 1.15),
-        damage: stats.damage,
-        phase: this.rng() * Math.PI * 2,
-        flash: 0,
-        dead: false,
-      });
+      const y = -12 - row * ZOMBIE.rowGap - this.rng() * 14;
+      this.spawnZombie(this.pickKind(mix), hp, x + range(this.rng, -spread / 2, spread / 2), y);
+    }
+  }
+
+  /** Continuous trickle so the road is never empty. */
+  private runStream(dt: number): void {
+    const phase = this.level.stream.find((p) => this.elapsed >= p.from && this.elapsed < p.to);
+    if (!phase || this.pendingStatus) return;
+
+    const t = (this.elapsed - phase.from) / (phase.to - phase.from);
+    this.streamDebt += rampValue(phase.rate, t) * dt;
+    while (this.streamDebt >= 1) {
+      this.streamDebt -= 1;
+      const x = range(this.rng, ROAD_LEFT, ROAD_RIGHT);
+      this.spawnZombie(this.pickKind(phase.mix), rampValue(phase.hp, t), x, -14);
+    }
+  }
+
+  private pickKind(mix: ZombieMix): ZombieKind {
+    const entries = Object.entries(mix) as [ZombieKind, number][];
+    const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
+    let roll = this.rng() * total;
+    for (const [kind, weight] of entries) {
+      roll -= weight;
+      if (roll <= 0) return kind;
+    }
+    return entries[0]?.[0] ?? 'walker';
+  }
+
+  private spawnZombie(kind: ZombieKind, baseHp: number, x: number, y: number): void {
+    const stats = ZOMBIE_KINDS[kind];
+    const size = range(this.rng, ZOMBIE.sizeJitter[0], ZOMBIE.sizeJitter[1]);
+    const r = stats.radius * size;
+    const hp = baseHp * stats.hp * size * size;
+    const shirts = PALETTE.shirts;
+    this.zombies.push({
+      kind,
+      x: clamp(x, ROAD_LEFT + r, ROAD_RIGHT - r),
+      y: y - r,
+      r,
+      hp,
+      maxHp: hp,
+      speed: stats.speed * range(this.rng, 0.85, 1.15),
+      damage: stats.damage,
+      phase: this.rng() * Math.PI * 2,
+      flash: 0,
+      shirt: shirts[Math.floor(this.rng() * shirts.length)] ?? shirts[0],
+      dead: false,
+    });
+  }
+
+  private addDecal(x: number, y: number, radius: number, color: string): void {
+    const points = 12;
+    this.decals.push({
+      x,
+      y,
+      color,
+      rotation: this.rng() * Math.PI * 2,
+      shape: Array.from({ length: points }, () => radius * range(this.rng, 0.55, 1.15)),
+    });
+    if (this.decals.length > MAX_DECALS) this.decals.shift();
+  }
+
+  private updateDecals(dt: number): void {
+    for (const decal of this.decals) decal.y += SCROLL_SPEED * dt;
+    if (this.decals[0] && this.decals[0].y > this.viewHeight + 60) {
+      this.decals = this.decals.filter((d) => d.y < this.viewHeight + 60);
     }
   }
 
@@ -289,6 +350,7 @@ export class Game {
     squad.targetX = clamp(squad.targetX, ROAD_LEFT + margin, ROAD_RIGHT - margin);
     squad.x += (squad.targetX - squad.x) * damp(SQUAD.followSharpness, dt);
     squad.flash = Math.max(0, squad.flash - dt);
+    squad.muzzle = Math.max(0, squad.muzzle - dt);
 
     if (squad.units <= 0) return;
 
@@ -304,6 +366,8 @@ export class Game {
     const shooters = Math.min(squad.units, SQUAD.maxShooters);
     const damage =
       (WEAPON.baseDamage * (1 + WEAPON.damageBonus * squad.damageLevel) * squad.units) / shooters;
+    squad.muzzle = 0.05;
+    this.juice.casing(squad.x + range(this.rng, -6, 6), squad.y, PALETTE.brass);
 
     for (let i = 0; i < shooters; i++) {
       const offset = this.formation[i];
@@ -328,8 +392,9 @@ export class Game {
     const squad = this.squad;
     squad.units = Math.max(0, squad.units - amount);
     squad.flash = 0.15;
-    this.juice.burst(x, y, PALETTE.soldier, 6 + amount * 2, 140);
-    this.juice.burst(x, y, PALETTE.blood, 4 + amount, 100);
+    this.juice.burst(x, y, PALETTE.soldier, 4 + amount * 2, 140);
+    this.juice.burst(x, y, PALETTE.blood, 6 + amount * 2, 120);
+    if (amount > 0) this.addDecal(x, y, 6 + Math.min(amount, 8) * 2, PALETTE.blood);
     this.juice.shake(0.25 + Math.min(amount, 10) * 0.04);
     if (squad.units <= 0) {
       this.juice.burst(squad.x, squad.y, PALETTE.soldier, 30, 220, 4);
@@ -425,11 +490,20 @@ export class Game {
       }
 
       if (
-        squad.units > 0 &&
-        circlesOverlap(zombie.x, zombie.y, zombie.r, squad.x, squad.y, radius)
+        zombie.dead ||
+        squad.units <= 0 ||
+        !circlesOverlap(zombie.x, zombie.y, zombie.r, squad.x, squad.y, radius)
       ) {
-        zombie.dead = true;
-        this.loseUnits(zombie.damage, zombie.x, zombie.y);
+        continue;
+      }
+
+      this.loseUnits(zombie.damage, zombie.x, zombie.y);
+      if (zombie.kind === 'brute') {
+        // Brutes shrug it off, stagger back, and come again.
+        zombie.y -= ZOMBIE.bruteKnockback;
+        zombie.flash = 0.15;
+      } else {
+        this.killZombie(zombie);
       }
     }
   }
@@ -439,6 +513,7 @@ export class Game {
     if (!boss || boss.dead) return;
     const squad = this.squad;
     boss.phase += dt * 3;
+    if (this.rng() < dt * 2) this.addDecal(boss.x, boss.y + boss.r * 0.6, 7, PALETTE.blood);
     boss.flash = Math.max(0, boss.flash - dt);
     boss.y += BOSS.speed * dt;
     boss.x += clamp(squad.x - boss.x, -1, 1) * BOSS.homing * dt;
@@ -504,7 +579,7 @@ export class Game {
         bullet.dead = true;
         gate.flash = 0.06;
         if (chargeGate(gate, volleyShare)) {
-          this.juice.burst(bullet.x, pair.y, PALETTE.gateGood, 3, 80, 2);
+          this.juice.burst(bullet.x, pair.y, PALETTE.bullet, 3, 80, 2);
         }
         break;
       }
@@ -512,17 +587,45 @@ export class Game {
   }
 
   private damageZombie(zombie: Zombie, damage: number): void {
+    if (zombie.dead) return;
     zombie.hp -= damage;
     zombie.flash = 0.08;
-    zombie.y -= 1.5;
-    if (zombie.hp > 0) return;
+    zombie.y -= zombie.kind === 'brute' ? 0.4 : 1.5;
+    if (zombie.hp <= 0) this.killZombie(zombie);
+  }
 
+  private killZombie(zombie: Zombie): void {
     zombie.dead = true;
     this.stats.kills++;
+    const { x, y, r } = zombie;
+
+    if (zombie.kind === 'bloater') {
+      this.juice.burst(x, y, PALETTE.bile, 26, 200, 4);
+      this.juice.burst(x, y, PALETTE.blood, 12, 160, 3);
+      this.addDecal(x, y, r * 2.4, PALETTE.bile);
+      this.juice.shake(0.3);
+      for (const other of this.zombies) {
+        if (
+          other.dead ||
+          !circlesOverlap(x, y, ZOMBIE.bloaterBlastRadius, other.x, other.y, other.r)
+        ) {
+          continue;
+        }
+        this.damageZombie(other, other.maxHp * ZOMBIE.bloaterBlastDamage);
+      }
+      return;
+    }
+
     const big = zombie.kind === 'brute';
-    this.juice.burst(zombie.x, zombie.y, PALETTE.blood, big ? 18 : 8, big ? 160 : 110);
-    this.juice.burst(zombie.x, zombie.y, PALETTE.zombie, big ? 10 : 4, 90);
-    if (big) this.juice.shake(0.2);
+    this.juice.burst(x, y, PALETTE.blood, big ? 26 : 9, big ? 180 : 120, big ? 4 : 3);
+    this.juice.burst(x, y, PALETTE.gore, big ? 12 : 3, 90, 4);
+    this.addDecal(
+      x,
+      y,
+      r * (big ? 1.9 : 1.4),
+      this.rng() < 0.5 ? PALETTE.blood : PALETTE.bloodDark,
+    );
+    if (big) this.juice.shake(0.35);
   }
 
   private damageCrate(crate: Crate, damage: number): void {
@@ -533,25 +636,26 @@ export class Game {
     crate.dead = true;
     this.applyUpgrade(crate.upgrade, crate.amount);
     this.juice.burst(crate.x, crate.y, PALETTE.crate, 22, 180, 4);
-    this.juice.burst(crate.x, crate.y, PALETTE.bullet, 14, 220, 3);
-    this.juice.float(crate.x, crate.y, UPGRADE_LABELS[crate.upgrade], PALETTE.bullet, 18);
+    this.juice.burst(crate.x, crate.y, PALETTE.muzzle, 14, 220, 3);
+    this.juice.float(crate.x, crate.y, UPGRADE_LABELS[crate.upgrade], PALETTE.muzzle, 18);
     this.juice.shake(0.3);
   }
 
   private damageBoss(boss: Boss, bullet: Bullet): void {
     boss.hp -= bullet.damage;
     boss.flash = 0.05;
-    if (this.rng() < 0.15) this.juice.burst(bullet.x, bullet.y, PALETTE.blood, 2, 90);
+    if (this.rng() < 0.2) this.juice.burst(bullet.x, bullet.y, PALETTE.blood, 2, 90);
     if (boss.hp > 0) return;
 
     boss.dead = true;
     this.stats.kills++;
     this.slowMo = JUICE.bossSlowMoDuration;
-    this.juice.burst(boss.x, boss.y, PALETTE.blood, 60, 260, 5);
-    this.juice.burst(boss.x, boss.y, PALETTE.boss, 40, 220, 5);
+    this.juice.burst(boss.x, boss.y, PALETTE.blood, 70, 280, 5);
+    this.juice.burst(boss.x, boss.y, PALETTE.gore, 40, 220, 6);
+    this.addDecal(boss.x, boss.y, boss.r * 2.2, PALETTE.bloodDark);
     this.juice.shake(1);
     for (const zombie of this.zombies) {
-      if (!zombie.dead) this.damageZombie(zombie, Number.POSITIVE_INFINITY);
+      if (!zombie.dead) this.killZombie(zombie);
     }
     this.finish('won');
   }
@@ -582,3 +686,5 @@ export class Game {
     this.gates = this.gates.filter((g) => g.y < limit);
   }
 }
+
+const rampValue = ([from, to]: StreamPhase['rate'], t: number): number => from + (to - from) * t;

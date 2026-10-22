@@ -8,8 +8,10 @@ export type LevelEvent =
       at: number;
       type: 'horde';
       count: number;
+      /** Base hp of a walker; other kinds scale from it. */
       hp: number;
-      kind?: ZombieKind;
+      /** Relative spawn weights per kind; defaults to walkers only. */
+      mix?: ZombieMix;
       /** Centre of the group; defaults to the road centre. */
       x?: number;
       /** Width the group is scattered across. */
@@ -17,9 +19,24 @@ export type LevelEvent =
     }
   | { at: number; type: 'boss'; hp: number };
 
+export type ZombieMix = Partial<Record<ZombieKind, number>>;
+
+/**
+ * Continuous trickle of zombies between `from` and `to`, ramping linearly
+ * from the first to the second value of `rate` (zombies/s) and `hp`.
+ */
+export interface StreamPhase {
+  from: number;
+  to: number;
+  rate: [number, number];
+  hp: [number, number];
+  mix: ZombieMix;
+}
+
 export interface LevelDefinition {
   id: number;
   name: string;
   seed: number;
+  stream: StreamPhase[];
   events: LevelEvent[];
 }

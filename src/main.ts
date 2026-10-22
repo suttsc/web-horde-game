@@ -1,13 +1,14 @@
+import '@fontsource/black-ops-one/latin-400.css';
 import './style.css';
 import { registerSW } from 'virtual:pwa-register';
 import { Game } from './game/Game';
 import { DragInput } from './game/input';
-import { render, type Viewport } from './game/render';
+import { DISPLAY_FONT, render, type Viewport } from './game/render';
 import { MAX_VIEW_HEIGHT, MIN_VIEW_HEIGHT, WORLD_WIDTH } from './game/tuning';
 import { level1 } from './levels/level1';
 import { Overlay } from './ui/overlay';
 
-const FIXED_STEP = 1 / 120;
+const FIXED_STEP = 1 / 60;
 const MAX_FRAME = 0.1;
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -68,5 +69,8 @@ const frame = (now: number): void => {
 
 overlay.showStatus(game.status, game.stats);
 requestAnimationFrame(frame);
+
+// Canvas text doesn't trigger webfont loading on its own.
+void document.fonts.load(`20px ${DISPLAY_FONT}`);
 
 registerSW({ immediate: true });

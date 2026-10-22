@@ -48,7 +48,7 @@ export const UPGRADE_CAPS = {
 export const GATE = {
   height: 38,
   /** Full squad volleys needed to raise a +/- gate by one point. */
-  volleysPerPoint: 4,
+  volleysPerPoint: 5,
   maxValue: 99,
 } as const;
 
@@ -58,17 +58,33 @@ export const CRATE = {
   contactDamage: 5,
 } as const;
 
-export const ZOMBIE = {
-  walker: { radius: 9, speed: 32, damage: 1 },
-  brute: { radius: 15, speed: 20, damage: 4 },
-  /** Sideways px/s zombies drift towards the squad. */
-  homing: 22,
-  rowGap: 20,
+export const ZOMBIE_KINDS = {
+  /** Small, fast and fragile. */
+  runner: { radius: 7, speed: 80, hp: 0.5, damage: 1 },
+  walker: { radius: 10, speed: 30, hp: 1, damage: 1 },
+  /** Swollen and slow; bursts on death, hurting nearby zombies. */
+  bloater: { radius: 15, speed: 20, hp: 3.5, damage: 4 },
+  /** Huge tank; survives contact and gets knocked back to come again. */
+  brute: { radius: 21, speed: 17, hp: 10, damage: 6 },
 } as const;
 
+export const ZOMBIE = {
+  /** Sideways px/s zombies drift towards the squad. */
+  homing: 30,
+  rowGap: 18,
+  /** Random size multiplier; hp scales with size squared. */
+  sizeJitter: [0.82, 1.25],
+  bloaterBlastRadius: 60,
+  bloaterBlastDamage: 0.6,
+  bruteKnockback: 70,
+} as const;
+
+/** Max blood pools kept on the road. */
+export const MAX_DECALS = 90;
+
 export const BOSS = {
-  radius: 44,
-  speed: 24,
+  radius: 48,
+  speed: 22,
   homing: 16,
 } as const;
 
