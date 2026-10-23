@@ -433,6 +433,7 @@ const drawCrate = (ctx: Ctx, crate: Crate): void => {
 const ZOMBIE_SKIN: Record<Zombie['kind'], { flesh: string; dark: string }> = {
   runner: { flesh: PALETTE.runnerFlesh, dark: PALETTE.fleshDark },
   walker: { flesh: PALETTE.flesh, dark: PALETTE.fleshDark },
+  stalker: { flesh: PALETTE.stalkerFlesh, dark: PALETTE.stalkerDark },
   bloater: { flesh: PALETTE.bloaterFlesh, dark: PALETTE.bloaterDark },
   brute: { flesh: PALETTE.bruteFlesh, dark: PALETTE.bruteDark },
 };
@@ -441,7 +442,21 @@ const drawZombie = (ctx: Ctx, zombie: Zombie): void => {
   const { x, y, r, kind } = zombie;
   const skin = ZOMBIE_SKIN[kind];
   const sway = Math.sin(zombie.phase) * r * 0.2;
-  const lurch = Math.cos(zombie.phase * 0.5) * r * 0.08;
+  const stalking = kind === 'stalker' && zombie.dashing;
+  // Stalkers lean hard into each dart; everyone else lurches.
+  const lurch = stalking ? zombie.dartDir * r * 0.35 : Math.cos(zombie.phase * 0.5) * r * 0.08;
+
+  if (stalking) {
+    // Motion smear behind the dash.
+    ctx.fillStyle = skin.dark;
+    for (const step of [1, 2, 3]) {
+      ctx.globalAlpha = 0.22 / step;
+      ctx.beginPath();
+      ctx.ellipse(x - zombie.dartDir * step * 7, y - step * 6, r * 0.8, r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
 
   ctx.fillStyle = PALETTE.shadow;
   ctx.beginPath();
@@ -484,7 +499,15 @@ const drawZombie = (ctx: Ctx, zombie: Zombie): void => {
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   const shoulder =
-    kind === 'brute' ? 1.2 : kind === 'runner' ? 0.85 : kind === 'bloater' ? 1.05 : 1;
+    kind === 'brute'
+      ? 1.2
+      : kind === 'runner'
+        ? 0.85
+        : kind === 'stalker'
+          ? 0.75
+          : kind === 'bloater'
+            ? 1.05
+            : 1;
   const depth = kind === 'bloater' ? 0.95 : 0.55;
   ctx.ellipse(bodyX, y - r * 0.05, r * shoulder, r * depth, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -527,7 +550,7 @@ const drawZombie = (ctx: Ctx, zombie: Zombie): void => {
   ctx.arc(hx - headR * 0.38, hy + headR * 0.15, headR * 0.24, 0, Math.PI * 2);
   ctx.arc(hx + headR * 0.38, hy + headR * 0.15, headR * 0.24, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = PALETTE.eye;
+  ctx.fillStyle = kind === 'stalker' ? PALETTE.stalkerEye : PALETTE.eye;
   ctx.beginPath();
   ctx.arc(hx - headR * 0.38, hy + headR * 0.18, headR * 0.09, 0, Math.PI * 2);
   ctx.arc(hx + headR * 0.38, hy + headR * 0.18, headR * 0.09, 0, Math.PI * 2);

@@ -170,6 +170,7 @@ export class Game {
     this.updateGates(dt);
     this.updateCrates(dt);
     this.updateZombies(dt);
+    this.separateZombies();
     this.updateBoss(dt);
     this.resolveBulletHits();
     this.cleanup();
@@ -317,6 +318,10 @@ export class Game {
       phase: this.rng() * Math.PI * 2,
       flash: 0,
       shirt: shirts[Math.floor(this.rng() * shirts.length)] ?? shirts[0],
+      drift: range(this.rng, -ZOMBIE.wander, ZOMBIE.wander),
+      dartTimer: this.rng() * 0.3,
+      dartDir: this.rng() < 0.5 ? -1 : 1,
+      dashing: false,
       dead: false,
     });
   }
@@ -484,9 +489,22 @@ export class Game {
     for (const zombie of this.zombies) {
       zombie.phase += dt * 6;
       zombie.flash = Math.max(0, zombie.flash - dt);
-      zombie.y += (SCROLL_SPEED * 0.5 + zombie.speed) * dt;
-      if (zombie.y > 0) {
-        zombie.x += clamp(squad.x - zombie.x, -1, 1) * ZOMBIE.homing * dt;
+      if (zombie.kind === 'stalker') {
+        this.moveStalker(zombie, dt);
+      } else {
+        zombie.y += (SCROLL_SPEED * 0.5 + zombie.speed) * dt;
+        zombie.x += zombie.drift * dt;
+      }
+
+      // Only close in on the squad when near it, so the horde stays spread out.
+      const closeness = clamp(1 - (squad.y - zombie.y) / ZOMBIE.homingRange, 0, 1);
+      zombie.x += clamp(squad.x - zombie.x, -1, 1) * ZOMBIE.homing * closeness * dt;
+
+      // Bounce wanderers off the curbs.
+      if (zombie.x < ROAD_LEFT + zombie.r || zombie.x > ROAD_RIGHT - zombie.r) {
+        zombie.drift = -zombie.drift;
+        zombie.dartDir = zombie.x < ROAD_CENTER ? 1 : -1;
+        zombie.x = clamp(zombie.x, ROAD_LEFT + zombie.r, ROAD_RIGHT - zombie.r);
       }
 
       if (
@@ -504,6 +522,51 @@ export class Game {
         zombie.flash = 0.15;
       } else {
         this.killZombie(zombie);
+      }
+    }
+  }
+
+  /** Darts diagonally in short bursts, flipping direction each time: a zigzag. */
+  private moveStalker(zombie: Zombie, dt: number): void {
+    zombie.dartTimer -= dt;
+    if (zombie.dartTimer <= 0) {
+      zombie.dashing = !zombie.dashing;
+      if (zombie.dashing) {
+        zombie.dartDir = -zombie.dartDir;
+        zombie.dartTimer = range(this.rng, ...ZOMBIE.stalkerDartTime);
+      } else {
+        zombie.dartTimer = range(this.rng, ...ZOMBIE.stalkerPauseTime);
+      }
+    }
+
+    const forward = zombie.dashing ? 1.5 : 0.35;
+    zombie.y += (SCROLL_SPEED * 0.5 + zombie.speed * forward) * dt;
+    if (zombie.dashing) zombie.x += zombie.dartDir * ZOMBIE.stalkerDartSpeed * dt;
+  }
+
+  /** Cheap pairwise push so zombies don't stack into one blob. */
+  private separateZombies(): void {
+    const zombies = this.zombies;
+    for (let i = 0; i < zombies.length; i++) {
+      const a = zombies[i];
+      if (!a || a.dead) continue;
+      for (let j = i + 1; j < zombies.length; j++) {
+        const b = zombies[j];
+        if (!b || b.dead) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const min = (a.r + b.r) * 1.1;
+        const distSq = dx * dx + dy * dy;
+        if (distSq >= min * min) continue;
+
+        const dist = Math.sqrt(distSq) || 0.01;
+        const push = ((min - dist) / dist) * ZOMBIE.separation * 0.5;
+        // Bigger zombies shove smaller ones aside.
+        const share = b.r / (a.r + b.r);
+        a.x -= dx * push * share * 2;
+        a.y -= dy * push * share;
+        b.x += dx * push * (1 - share) * 2;
+        b.y += dy * push * (1 - share);
       }
     }
   }

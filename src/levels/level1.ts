@@ -15,15 +15,21 @@ export const level1: LevelDefinition = {
   seed: 1337,
   stream: [
     { from: 2, to: 16, rate: [0.8, 1.6], hp: [2, 4], mix: { walker: 1 } },
-    { from: 16, to: 30, rate: [1.6, 2.4], hp: [3, 5], mix: { walker: 3, runner: 1 } },
+    { from: 16, to: 30, rate: [1.4, 2.1], hp: [3, 5], mix: { walker: 3, runner: 1, stalker: 0.5 } },
     {
       from: 30,
       to: 47,
-      rate: [2.4, 3.2],
-      hp: [10, 15],
-      mix: { walker: 3, runner: 2, bloater: 0.6 },
+      rate: [2.1, 2.8],
+      hp: [8, 12],
+      mix: { walker: 3, runner: 2, stalker: 1, bloater: 0.6 },
     },
-    { from: 47, to: 72, rate: [3.2, 4], hp: [10, 14], mix: { walker: 3, runner: 2, bloater: 1 } },
+    {
+      from: 47,
+      to: 72,
+      rate: [3.2, 4],
+      hp: [10, 14],
+      mix: { walker: 3, runner: 2, stalker: 1.5, bloater: 1 },
+    },
     {
       from: 72,
       to: 200,
@@ -46,6 +52,7 @@ export const level1: LevelDefinition = {
     { at: 22, type: 'horde', count: 2, hp: 5, x: 250, spread: 80, mix: { brute: 1 } },
     { at: 24, type: 'horde', count: 14, hp: 5, x: 250, spread: 140, mix: { runner: 1 } },
     { at: 26, type: 'gates', left: add(-6), right: add(-3) },
+    { at: 27, type: 'horde', count: 5, hp: 5, spread: 260, mix: { stalker: 1 } },
 
     { at: 30, type: 'banner', text: 'Wave 3' },
     { at: 31, type: 'horde', count: 24, hp: 8, spread: 290, mix: { walker: 3, bloater: 1 } },
@@ -72,6 +79,7 @@ export const level1: LevelDefinition = {
       mix: { walker: 3, runner: 2, bloater: 1 },
     },
     { at: 54, type: 'horde', count: 4, hp: 13, spread: 240, mix: { brute: 1 } },
+    { at: 56, type: 'horde', count: 9, hp: 13, spread: 280, mix: { stalker: 1 } },
     { at: 57, type: 'crate', x: 180, hp: 800, upgrade: 'damage' },
     {
       at: 60,

@@ -33,7 +33,7 @@ export interface Crate {
   dead: boolean;
 }
 
-export type ZombieKind = 'runner' | 'walker' | 'bloater' | 'brute';
+export type ZombieKind = 'runner' | 'walker' | 'stalker' | 'bloater' | 'brute';
 
 export interface Zombie {
   kind: ZombieKind;
@@ -48,6 +48,12 @@ export interface Zombie {
   flash: number;
   /** Clothing colour, picked at spawn for variety. */
   shirt: string;
+  /** Personal sideways wander in px/s, so the horde doesn't move in lockstep. */
+  drift: number;
+  /** Stalker dart state: time left in the current dash/pause, and direction. */
+  dartTimer: number;
+  dartDir: number;
+  dashing: boolean;
   dead: boolean;
 }
 

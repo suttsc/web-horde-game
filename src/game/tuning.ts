@@ -62,6 +62,8 @@ export const ZOMBIE_KINDS = {
   /** Small, fast and fragile. */
   runner: { radius: 7, speed: 80, hp: 0.5, damage: 1 },
   walker: { radius: 10, speed: 30, hp: 1, damage: 1 },
+  /** Lean and quick; darts across the road in sharp zigzags. */
+  stalker: { radius: 8, speed: 62, hp: 0.9, damage: 1 },
   /** Swollen and slow; bursts on death, hurting nearby zombies. */
   bloater: { radius: 15, speed: 20, hp: 3.5, damage: 4 },
   /** Huge tank; survives contact and gets knocked back to come again. */
@@ -69,8 +71,17 @@ export const ZOMBIE_KINDS = {
 } as const;
 
 export const ZOMBIE = {
-  /** Sideways px/s zombies drift towards the squad. */
-  homing: 30,
+  /** Sideways px/s zombies drift towards the squad once within `homingRange`. */
+  homing: 16,
+  /** Vertical distance from the squad at which zombies start closing in. */
+  homingRange: 180,
+  /** Max px/s of each zombie's own random sideways wander. */
+  wander: 16,
+  /** How hard overlapping zombies push apart (0..1 per step). */
+  separation: 0.35,
+  stalkerDartSpeed: 165,
+  stalkerDartTime: [0.22, 0.4],
+  stalkerPauseTime: [0.06, 0.16],
   rowGap: 18,
   /** Random size multiplier; hp scales with size squared. */
   sizeJitter: [0.82, 1.25],

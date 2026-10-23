@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Game, type GameStats, type GameStatus } from '../game/Game';
 import { applyGate } from '../game/gates';
 import { ROAD_CENTER } from '../game/tuning';
+import type { Zombie } from '../game/types';
 import { level1 } from './level1';
 
 const STEP = 1 / 60;
@@ -13,8 +14,8 @@ interface Outcome {
 }
 
 /**
- * Plays the level headlessly. The "skilled" bot takes the better gate and
- * lines up on crates in between; the idle one never moves.
+ * Plays the level headlessly. The "skilled" bot takes the better gate, lines
+ * up on crates, and otherwise aims at the nearest zombie; the idle one never moves.
  */
 const playLevel = (skilled: boolean): Outcome => {
   let stats: GameStats = { kills: 0, peakUnits: 0, time: 0 };
@@ -34,6 +35,12 @@ const playLevel = (skilled: boolean): Outcome => {
         target = left >= right ? 100 : 260;
       } else if (crate) {
         target = crate.x;
+      } else {
+        // Line up on the closest zombie still in front of the squad.
+        const threat = game.zombies
+          .filter((z) => z.y < squad.y - 20)
+          .reduce<Zombie | undefined>((best, z) => (!best || z.y > best.y ? z : best), undefined);
+        if (threat) target = threat.x;
       }
     }
     game.update(STEP, (target - game.squad.x) * 0.1, 0);
@@ -42,7 +49,7 @@ const playLevel = (skilled: boolean): Outcome => {
 };
 
 describe('level 1 balance', () => {
-  it('is beatable by a player who picks gates and crates well', () => {
+  it('is beatable by a player who aims and picks gates and crates well', () => {
     expect(playLevel(true).status).toBe('won');
   });
 
