@@ -84,16 +84,23 @@ export class Game {
   private slowMo = 0;
   private endTimer = 0;
   private pendingStatus: GameStatus | null = null;
-  private readonly bossAt: number;
 
   constructor(
-    private readonly level: LevelDefinition,
+    private level: LevelDefinition,
     private readonly listeners: GameListeners = {},
   ) {
     this.rng = createRng(level.seed);
     this.juice = new Juice(this.rng);
-    this.bossAt = level.events.find((e) => e.type === 'boss')?.at ?? 60;
     this.reset();
+  }
+
+  get levelId(): number {
+    return this.level.id;
+  }
+
+  /** When the boss appears; drives the progress bar. */
+  private get bossAt(): number {
+    return this.level.events.find((e) => e.type === 'boss')?.at ?? 60;
   }
 
   get squadRadius(): number {
@@ -115,7 +122,8 @@ export class Game {
     if (this.squad) this.squad.y = this.viewHeight - SQUAD.bottomOffset;
   }
 
-  start(): void {
+  start(level: LevelDefinition = this.level): void {
+    this.level = level;
     this.reset();
     this.setStatus('playing');
   }

@@ -26,24 +26,42 @@ npm run deploy    # build + wrangler deploy
 
 ```
 src/
-  main.ts            bootstrap: canvas sizing, game loop, input, overlay
+  main.ts            bootstrap: canvas sizing, game loop, input, screen flow
   game/
-    Game.ts          simulation (timeline, squad, combat, win/lose)
-    render.ts        all canvas drawing (flat vector shapes)
-    tuning.ts        every gameplay number lives here
+    Game.ts          simulation (timeline, stream, squad, combat, win/lose)
+    render.ts        all canvas drawing
+    tuning.ts        every global gameplay number lives here
     gates.ts         gate math (pure, unit-tested)
     juice.ts         screen shake, particles, floating text
   levels/
-    level1.ts        declarative event timeline for level 1
-    level1.balance.test.ts  headless bot playthroughs guarding difficulty
-  ui/overlay.ts      Tailwind-styled DOM screens and HUD
+    level1..5.ts     declarative timelines: Pinewood, Millbrook, Ashford, Redfield, Ground Zero
+    index.ts         campaign order
+    balance.test.ts  headless bot playthroughs of every level
+  progress/          campaign progress saved to localStorage (fails soft)
+  ui/
+    overlay.ts       Tailwind-styled DOM screens and HUD
+    map.ts           SVG campaign map: the evacuation route and town postcards
 ```
+
+## Campaign
+
+Five towns along one road, each unlocking the next. Progress and best times are stored per device
+under the `horde.progress.v1` localStorage key; "Reset progress" on the map clears it.
+
+| #   | Town        | Introduces                        |
+| --- | ----------- | --------------------------------- |
+| 1   | Pinewood    | walkers, gates, crates (tutorial) |
+| 2   | Millbrook   | runners, first bloaters           |
+| 3   | Ashford     | stalkers, first brutes            |
+| 4   | Redfield    | everything, slightly toned down   |
+| 5   | Ground Zero | everything, full pressure         |
 
 ## Tuning
 
-Balance changes go in `src/game/tuning.ts` (global numbers) and `src/levels/level1.ts` (what spawns
-and when). `npm test` runs two headless playthroughs: a bot that aims at the nearest zombie, picks the better gate and lines up on crates must win, and a
-player who never moves must be overrun within 30 seconds.
+Balance changes go in `src/game/tuning.ts` (global numbers) and `src/levels/levelN.ts` (what spawns
+and when). `npm test` plays every level headlessly: a bot that aims at the nearest zombie, picks the
+better gate and lines up on crates must win each one, and from level 2 on a player who never moves
+must lose (from level 3, within 40 seconds).
 
 ## Deploy
 

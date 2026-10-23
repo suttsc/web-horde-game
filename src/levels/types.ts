@@ -35,7 +35,10 @@ export interface StreamPhase {
 
 export interface LevelDefinition {
   id: number;
+  /** Town name shown on the map. */
   name: string;
+  /** One-line briefing shown on the map. */
+  blurb: string;
   seed: number;
   stream: StreamPhase[];
   events: LevelEvent[];

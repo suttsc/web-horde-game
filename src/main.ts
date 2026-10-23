@@ -5,20 +5,83 @@ import { Game } from './game/Game';
 import { DragInput } from './game/input';
 import { DISPLAY_FONT, render, type Viewport } from './game/render';
 import { MAX_VIEW_HEIGHT, MIN_VIEW_HEIGHT, WORLD_WIDTH } from './game/tuning';
-import { level1 } from './levels/level1';
+import { LEVELS, findLevel } from './levels';
+import type { LevelDefinition } from './levels/types';
+import { ProgressStore, browserStorage } from './progress/progress';
 import { Overlay } from './ui/overlay';
 
 const FIXED_STEP = 1 / 60;
 const MAX_FRAME = 0.1;
+const LEVEL_IDS = LEVELS.map((level) => level.id);
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const context = canvas.getContext('2d', { alpha: false });
 if (!context) throw new Error('Canvas 2D is not supported');
 const ctx: CanvasRenderingContext2D = context;
 
-const overlay = new Overlay(() => game.start());
-const game = new Game(level1, {
-  onStatus: (status, stats) => overlay.showStatus(status, stats),
+const progress = new ProgressStore(browserStorage());
+let currentLevel: LevelDefinition = LEVELS[0] as LevelDefinition;
+
+const openMap = (): void =>
+  overlay.showMap(
+    LEVELS.map((level) => ({ level, state: progress.stateOf(level.id, LEVEL_IDS) })),
+    progress.snapshot,
+  );
+
+const play = (level: LevelDefinition): void => {
+  if (progress.stateOf(level.id, LEVEL_IDS) === 'locked') return;
+  currentLevel = level;
+  overlay.setLevel(level);
+  game.start(level);
+};
+
+const overlay = new Overlay({
+  onSelectLevel: (id) => {
+    const level = findLevel(id);
+    if (level) play(level);
+  },
+  onAction: (action) => {
+    switch (action) {
+      case 'map':
+        openMap();
+        break;
+      case 'retry':
+        play(currentLevel);
+        break;
+      case 'next': {
+        const next = LEVELS[LEVELS.indexOf(currentLevel) + 1];
+        if (next) play(next);
+        else openMap();
+        break;
+      }
+      case 'reset':
+        if (window.confirm('Reset all progress? Every town will be locked again.')) {
+          progress.reset();
+          openMap();
+        }
+        break;
+    }
+  },
+});
+
+const game = new Game(currentLevel, {
+  onStatus: (status, stats) => {
+    if (status === 'playing') {
+      overlay.showScreen('playing');
+      return;
+    }
+    if (status !== 'won' && status !== 'lost') return;
+
+    const won = status === 'won';
+    const newBest = won ? progress.complete(currentLevel.id, stats) : false;
+    overlay.showResult({
+      won,
+      level: currentLevel,
+      stats,
+      hasNext: LEVELS.indexOf(currentLevel) < LEVELS.length - 1,
+      newBest,
+    });
+  },
   onBanner: (text) => overlay.showBanner(text),
 });
 
@@ -67,7 +130,7 @@ const frame = (now: number): void => {
   requestAnimationFrame(frame);
 };
 
-overlay.showStatus(game.status, game.stats);
+overlay.showScreen('title');
 requestAnimationFrame(frame);
 
 // Canvas text doesn't trigger webfont loading on its own.

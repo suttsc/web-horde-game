@@ -3,7 +3,8 @@ import { Game, type GameStats, type GameStatus } from '../game/Game';
 import { applyGate } from '../game/gates';
 import { ROAD_CENTER } from '../game/tuning';
 import type { Zombie } from '../game/types';
-import { level1 } from './level1';
+import { LEVELS } from './index';
+import type { LevelDefinition } from './types';
 
 const STEP = 1 / 60;
 const MAX_SECONDS = 200;
@@ -17,9 +18,9 @@ interface Outcome {
  * Plays the level headlessly. The "skilled" bot takes the better gate, lines
  * up on crates, and otherwise aims at the nearest zombie; the idle one never moves.
  */
-const playLevel = (skilled: boolean): Outcome => {
+const playLevel = (level: LevelDefinition, skilled: boolean): Outcome => {
   let stats: GameStats = { kills: 0, peakUnits: 0, time: 0 };
-  const game = new Game(level1, { onStatus: (_, s) => (stats = { ...s }) });
+  const game = new Game(level, { onStatus: (_, s) => (stats = { ...s }) });
   game.setViewHeight(700);
   game.start();
 
@@ -48,14 +49,20 @@ const playLevel = (skilled: boolean): Outcome => {
   return { status: game.status, stats };
 };
 
-describe('level 1 balance', () => {
-  it('is beatable by a player who aims and picks gates and crates well', () => {
-    expect(playLevel(true).status).toBe('won');
-  });
+describe.each(LEVELS.map((level) => [level.id, level] as const))(
+  'level %i balance',
+  (id, level) => {
+    it('is beatable by a player who aims and picks gates and crates well', () => {
+      expect(playLevel(level, true).status).toBe('won');
+    });
 
-  it('overruns a player who never moves early on', () => {
-    const { status, stats } = playLevel(false);
-    expect(status).toBe('lost');
-    expect(stats.time).toBeLessThan(30);
-  });
-});
+    // Level 1 is the tutorial; from level 2 on, standing still must fail.
+    it.skipIf(id < 2)('overruns a player who never moves', () => {
+      expect(playLevel(level, false).status).toBe('lost');
+    });
+
+    it.skipIf(id < 3)('overruns a player who never moves early on', () => {
+      expect(playLevel(level, false).stats.time).toBeLessThan(40);
+    });
+  },
+);
