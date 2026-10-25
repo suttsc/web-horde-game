@@ -29,39 +29,52 @@ src/
   main.ts            bootstrap: canvas sizing, game loop, input, screen flow
   game/
     Game.ts          simulation (timeline, stream, squad, combat, win/lose)
+    perks.ts         upgrade definitions and the random 1-of-3 roll
+    support.ts       perk-driven support fire: grenades, fires, sniper
     render.ts        all canvas drawing
     tuning.ts        every global gameplay number lives here
     gates.ts         gate math (pure, unit-tested)
     juice.ts         screen shake, particles, floating text
   levels/
-    level1..5.ts     declarative timelines: Pinewood, Millbrook, Ashford, Redfield, Ground Zero
-    index.ts         campaign order
-    balance.test.ts  headless bot playthroughs of every level
-  progress/          campaign progress saved to localStorage (fails soft)
+    campaign.ts      the five level recipes
+    generate.ts      seeded generator: recipe + seed -> concrete level
+    stars.ts         star goals and scoring
+  progress/          campaign progress and stars saved to localStorage (fails soft)
+  testing/bot.ts     headless bot used by the balance tests
   ui/
-    overlay.ts       Tailwind-styled DOM screens and HUD
+    overlay.ts       Tailwind-styled DOM screens, HUD and upgrade picks
     map.ts           SVG campaign map: the evacuation route and town postcards
 ```
 
-## Campaign
+## How a run works
 
-Five towns along one road, each unlocking the next. Progress and best times are stored per device
-under the `horde.progress.v1` localStorage key; "Reset progress" on the map clears it.
+- **Generated levels.** Each town is a _recipe_ (length, waves, enemy mix, stream and horde ramps,
+  gate generosity, boss). Every attempt, retries included, generates a fresh layout from a random
+  seed: gate values and sides, crate rewards and lanes, horde timing, packs and positions all vary.
+- **Gates.** Bullets pass through gates, charging each gate once on the way, so pumping a gate
+  costs you positioning, not firepower.
+- **Upgrades.** Before every wave after the first, and again before the boss, the game pauses for a
+  pick of 1 from 3 random perks (piercing, incendiary, medic, grenadier, overwatch, scavenger, body
+  armour, fire rate, damage, reinforcements). Most stack.
+- **Stars.** Each town has three: clear it, finish with enough soldiers, and a town-specific
+  challenge (no red gates, a kill count, or a fast boss kill). Stars are kept once earned and shown
+  on the map.
 
-| #   | Town        | Introduces                        |
-| --- | ----------- | --------------------------------- |
-| 1   | Pinewood    | walkers, gates, crates (tutorial) |
-| 2   | Millbrook   | runners, first bloaters           |
-| 3   | Ashford     | stalkers, first brutes            |
-| 4   | Redfield    | everything, slightly toned down   |
-| 5   | Ground Zero | everything, full pressure         |
+| #   | Town        | Introduces                        | Third star               |
+| --- | ----------- | --------------------------------- | ------------------------ |
+| 1   | Pinewood    | walkers, gates, crates (tutorial) | Never take a red gate    |
+| 2   | Millbrook   | runners, first bloaters           | Kill 150 zombies         |
+| 3   | Ashford     | stalkers, first brutes            | Kill the boss within 10s |
+| 4   | Redfield    | everything, slightly toned down   | Never take a red gate    |
+| 5   | Ground Zero | everything, full pressure         | Kill the boss within 15s |
 
 ## Tuning
 
-Balance changes go in `src/game/tuning.ts` (global numbers) and `src/levels/levelN.ts` (what spawns
-and when). `npm test` plays every level headlessly: a bot that aims at the nearest zombie, picks the
-better gate and lines up on crates must win each one, and from level 2 on a player who never moves
-must lose (from level 3, within 40 seconds).
+Global numbers live in `src/game/tuning.ts` (including perk strength), level shape in
+`src/levels/campaign.ts`, and layout rules in `src/levels/generate.ts`. `npm test` plays every level
+on 12 seeds with a bot that aims, picks the better gate, takes crates and focuses the boss. It must
+win at least 90% of level 1 down to 50% of level 5, and a player who never moves must lose at least
+80% of runs from level 2 on.
 
 ## Deploy
 

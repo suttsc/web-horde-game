@@ -42,6 +42,7 @@
             <span class="text-[10px] text-stone-500">KILLS</span>
           </span>
         </div>
+        <div id="hud-perks" class="mt-1.5 flex flex-wrap gap-1"></div>
       </div>
 
       <!-- Wave banner -->
@@ -81,6 +82,21 @@
         </button>
       </section>
 
+      <!-- Upgrade pick between waves -->
+      <section
+        id="screen-perk"
+        class="absolute inset-0 hidden flex-col items-center justify-center gap-5 bg-black/75 px-5 backdrop-blur-[2px]"
+      >
+        <div class="text-center">
+          <p
+            id="perk-heading"
+            class="font-display text-xs tracking-[0.35em] text-amber-600 uppercase"
+          ></p>
+          <h2 class="mt-1 font-display text-3xl text-stone-100 uppercase">Choose an upgrade</h2>
+        </div>
+        <div id="perk-options" class="flex w-full max-w-sm flex-col gap-3"></div>
+      </section>
+
       <!-- Campaign map -->
       <section
         id="screen-map"
@@ -114,6 +130,7 @@
       >
         <h2 id="end-title" class="font-display text-6xl uppercase"></h2>
         <p id="end-subtitle" class="text-stone-400"></p>
+        <ul id="end-stars" class="w-full max-w-xs space-y-1.5 text-left text-sm"></ul>
         <dl class="grid w-full max-w-xs grid-cols-3 gap-2">
           <div class="border border-stone-700/60 bg-black/50 p-3">
             <dt class="text-[10px] font-bold tracking-widest text-stone-500 uppercase">Kills</dt>

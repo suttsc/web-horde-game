@@ -17,6 +17,8 @@ export type LevelEvent =
       /** Width the group is scattered across. */
       spread?: number;
     }
+  /** Pause for an upgrade pick; `wave` is the wave about to start. */
+  | { at: number; type: 'perk'; wave: number }
   | { at: number; type: 'boss'; hp: number };
 
 export type ZombieMix = Partial<Record<ZombieKind, number>>;
@@ -42,4 +44,34 @@ export interface LevelDefinition {
   seed: number;
   stream: StreamPhase[];
   events: LevelEvent[];
+}
+
+/** A level's third star: a specific challenge on top of clearing it with enough soldiers. */
+export type StarChallenge =
+  { type: 'noBadGates' } | { type: 'bossTime'; seconds: number } | { type: 'kills'; count: number };
+
+/**
+ * What a level is made of. `generateLevel` turns a recipe plus a seed into a
+ * concrete LevelDefinition, so every attempt plays out differently.
+ * `[start, end]` pairs ramp linearly from the first wave to the last.
+ */
+export interface LevelRecipe {
+  id: number;
+  name: string;
+  blurb: string;
+  /** Seconds until the boss arrives. */
+  duration: number;
+  waves: number;
+  stream: { rate: [number, number]; hp: [number, number] };
+  hordes: { perWave: number; size: [number, number]; hp: [number, number] };
+  /** Zombie kinds and when (0..1 through the level) they start appearing. */
+  kinds: Partial<Record<ZombieKind, { from: number; weight: number }>>;
+  brutes?: { from: number; count: [number, number] };
+  crates: { hp: [number, number] };
+  /** Chance a wave's second gate pair is two red gates you must shoot up. */
+  doubleRedChance: number;
+  /** Scales gate values; bigger levels need bigger numbers. */
+  gateScale: number;
+  boss: { hp: number };
+  stars: { units: number; challenge: StarChallenge };
 }

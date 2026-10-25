@@ -34,11 +34,13 @@ export const render = (ctx: Ctx, game: Game, viewport: Viewport): void => {
 
   drawBackground(ctx, game.scroll, height);
   for (const decal of game.decals) drawDecal(ctx, decal);
+  drawFires(ctx, game);
   for (const pair of game.gates) drawGatePair(ctx, pair);
   for (const crate of game.crates) drawCrate(ctx, crate);
   for (const zombie of game.zombies) drawZombie(ctx, zombie);
   if (game.boss && !game.boss.dead) drawBoss(ctx, game.boss);
   drawBullets(ctx, game);
+  drawSupport(ctx, game);
   if (game.squad.units > 0 && game.status !== 'menu') drawSquad(ctx, game);
   drawParticles(ctx, game);
   drawFloatingTexts(ctx, game);
@@ -760,6 +762,62 @@ const drawBullets = (ctx: Ctx, game: Game): void => {
 };
 
 // --- Effects ----------------------------------------------------------------------------
+
+/** Incendiary ground fires: flickering layered glow. */
+const drawFires = (ctx: Ctx, game: Game): void => {
+  for (const fire of game.support.fires) {
+    const fade = Math.min(1, fire.life / 0.5);
+    const flicker = 0.85 + Math.sin(fire.life * 23 + fire.x) * 0.15;
+    ctx.globalAlpha = 0.35 * fade;
+    ctx.fillStyle = '#7c2d12';
+    ctx.beginPath();
+    ctx.ellipse(fire.x, fire.y, fire.r * 1.1, fire.r * 0.75, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.55 * fade;
+    ctx.fillStyle = '#ea580c';
+    ctx.beginPath();
+    ctx.ellipse(fire.x, fire.y, fire.r * 0.7 * flicker, fire.r * 0.45 * flicker, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.7 * fade;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.ellipse(fire.x, fire.y, fire.r * 0.3 * flicker, fire.r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+};
+
+/** Grenades in flight (with a fake arc) and sniper tracers. */
+const drawSupport = (ctx: Ctx, game: Game): void => {
+  for (const grenade of game.support.grenades) {
+    const t = grenade.t;
+    const x = grenade.fromX + (grenade.x - grenade.fromX) * t;
+    const y = grenade.fromY + (grenade.y - grenade.fromY) * t;
+    const lift = Math.sin(t * Math.PI) * 60;
+    ctx.fillStyle = PALETTE.shadow;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 4, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3f4a2a';
+    ctx.strokeStyle = '#11140b';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(x, y - lift, 3.5 + Math.sin(t * Math.PI) * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  for (const tracer of game.support.tracers) {
+    ctx.globalAlpha = Math.min(1, tracer.life / 0.14);
+    ctx.strokeStyle = '#fff7d6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(tracer.x1, tracer.y1);
+    ctx.lineTo(tracer.x2, tracer.y2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+};
 
 const drawParticles = (ctx: Ctx, game: Game): void => {
   for (const p of game.juice.particles) {

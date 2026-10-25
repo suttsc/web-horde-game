@@ -48,7 +48,7 @@ export const UPGRADE_CAPS = {
 export const GATE = {
   height: 38,
   /** Full squad volleys needed to raise a +/- gate by one point. */
-  volleysPerPoint: 5,
+  volleysPerPoint: 10,
   maxValue: 99,
 } as const;
 
@@ -97,6 +97,23 @@ export const BOSS = {
   radius: 48,
   speed: 22,
   homing: 16,
+} as const;
+
+/**
+ * Perk effects. Support damage is expressed in "volleys": one full squad
+ * volley's worth of damage, so perks scale with squad size and upgrades.
+ */
+export const PERK = {
+  piercePerStack: 1,
+  incendiary: { radius: 22, duration: 2.5, volleyDps: 0.3 },
+  medicInterval: 4,
+  grenadier: { interval: 2.6, flightTime: 0.55, radius: 50, volleys: 1.3 },
+  overwatch: { interval: 1.6, volleys: 1.6 },
+  scavengerBonusUnits: 3,
+  /** Soldiers granted by Reinforcements: base + perWave * wave number. */
+  reinforcements: { base: 3, perWave: 2 },
+  /** Chance per Body Armor stack to shrug off a contact. */
+  armorChance: 0.25,
 } as const;
 
 export const JUICE = {

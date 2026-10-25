@@ -1,6 +1,6 @@
 import { createRng, range } from '../game/rng';
-import type { LevelState, Progress } from '../progress/progress';
-import type { LevelDefinition } from '../levels/types';
+import type { LevelState } from '../progress/progress';
+import type { LevelRecipe } from '../levels/types';
 
 interface Point {
   x: number;
@@ -48,12 +48,14 @@ const STOP_ROUTE_INDEX = [1, 3, 5, 7, 9];
 const FONT = `font-family="'Black Ops One', Impact, sans-serif"`;
 
 export interface MapEntry {
-  level: LevelDefinition;
+  level: LevelRecipe;
+  /** Stars ever earned on this level. */
+  stars: readonly boolean[];
   state: LevelState;
 }
 
 /** Renders the campaign map as an SVG string. */
-export const renderMap = (entries: readonly MapEntry[], progress: Readonly<Progress>): string => {
+export const renderMap = (entries: readonly MapEntry[]): string => {
   const reached = entries.reduce((last, entry, i) => (entry.state !== 'locked' ? i : last), 0);
   const travelled = ROUTE.slice(0, (STOP_ROUTE_INDEX[reached] ?? 1) + 1);
 
@@ -72,7 +74,7 @@ export const renderMap = (entries: readonly MapEntry[], progress: Readonly<Progr
   <path d="${pathOf(ROUTE)}" fill="none" stroke="#26241f" stroke-width="20" stroke-linejoin="miter"/>
   <path d="${pathOf(ROUTE)}" fill="none" stroke="#5c5541" stroke-width="1.5" stroke-dasharray="7 7"/>
   <path d="${pathOf(travelled)}" fill="none" stroke="#d97706" stroke-width="3" stroke-dasharray="10 6" class="map-march"/>
-  ${entries.map((entry, i) => stop(entry, i, progress)).join('')}
+  ${entries.map((entry, i) => stop(entry, i)).join('')}
 </svg>`;
 };
 
@@ -94,47 +96,48 @@ const terrain = (): string => {
   return out;
 };
 
-const stop = (entry: MapEntry, index: number, progress: Readonly<Progress>): string => {
+const stop = (entry: MapEntry, index: number): string => {
   const position = STOPS[index];
   if (!position) return '';
-  const { level, state } = entry;
+  const { level, state, stars } = entry;
   const { node, card } = position;
   const playable = state !== 'locked';
-  const best = progress.best[level.id];
-  const status =
-    state === 'completed'
-      ? best
-        ? `${Math.round(best.time)}s`
-        : ''
-      : state === 'available'
-        ? 'Deploy'
-        : '';
-  const statusColor =
-    state === 'completed' ? '#84cc16' : state === 'available' ? '#f59e0b' : '#57534e';
-  const label = `${level.name}, level ${level.id}: ${state === 'completed' ? 'cleared' : state}`;
+  const earned = stars.filter(Boolean).length;
+  const label = `${level.name}, level ${level.id}: ${
+    state === 'completed' ? `cleared, ${earned} of 3 stars` : state
+  }`;
 
   return `
 <g ${playable ? `role="button" tabindex="0" data-level="${level.id}" class="map-stop cursor-pointer outline-none"` : 'aria-disabled="true"'} aria-label="${label}">
   ${postcard(level, state, card)}
-  ${caption(level, state, card, status, statusColor)}
+  ${caption(level, state, card, stars)}
   ${marker(level.id, state, node)}
 </g>`;
 };
 
-/** Town name and status in a band across the top of the postcard. */
+/** Town name plus stars (cleared) or a call to action (next) across the top of the postcard. */
 const caption = (
-  level: LevelDefinition,
+  level: LevelRecipe,
   state: LevelState,
   card: Point,
-  status: string,
-  statusColor: string,
+  stars: readonly boolean[],
 ): string => {
   const x = card.x - CARD_W / 2;
   const y = card.y - CARD_H / 2;
+  const right =
+    state === 'completed'
+      ? `<text x="${x + CARD_W - 5}" y="${y + 12}" text-anchor="end" font-family="system-ui, sans-serif" font-size="10" letter-spacing="0.5">${[
+          0, 1, 2,
+        ]
+          .map((i) => `<tspan fill="${stars[i] ? '#fbbf24' : '#44403c'}">★</tspan>`)
+          .join('')}</text>`
+      : state === 'available'
+        ? `<text x="${x + CARD_W - 5}" y="${y + 11}" text-anchor="end" font-family="system-ui, sans-serif" font-size="6.5" font-weight="800" letter-spacing="0.6" fill="#f59e0b">DEPLOY</text>`
+        : '';
   return `
 <rect x="${x + 1}" y="${y + 1}" width="${CARD_W - 2}" height="15" rx="3" fill="#0c0a09" opacity="0.72"/>
 <text x="${x + 5}" y="${y + 11.5}" ${FONT} font-size="9.5" fill="${state === 'locked' ? '#78716c' : '#ede6d3'}">${level.name.toUpperCase()}</text>
-<text x="${x + CARD_W - 5}" y="${y + 11}" text-anchor="end" font-family="system-ui, sans-serif" font-size="6.5" font-weight="800" letter-spacing="0.6" fill="${statusColor}">${status.toUpperCase()}</text>`;
+${right}`;
 };
 
 const marker = (id: number, state: LevelState, node: Point): string => {
@@ -154,7 +157,7 @@ const marker = (id: number, state: LevelState, node: Point): string => {
 };
 
 /** A little skyline picture of the town; its mood reflects the level state. */
-const postcard = (level: LevelDefinition, state: LevelState, centre: Point): string => {
+const postcard = (level: LevelRecipe, state: LevelState, centre: Point): string => {
   const x = centre.x - CARD_W / 2;
   const y = centre.y - CARD_H / 2;
   const clip = `card-${level.id}`;
@@ -165,7 +168,8 @@ const postcard = (level: LevelDefinition, state: LevelState, centre: Point): str
         ? ['#7f1d1d', '#1c0a0a']
         : ['#3a3633', '#1c1917'];
   const big = level.id === 5;
-  const rng = createRng(level.seed);
+  // Seeded by level id so each town keeps the same skyline.
+  const rng = createRng(level.id * 101);
   const ground = y + CARD_H - 8;
 
   let buildings = '';

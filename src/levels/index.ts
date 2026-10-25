@@ -1,12 +1,11 @@
-import { level1 } from './level1';
-import { level2 } from './level2';
-import { level3 } from './level3';
-import { level4 } from './level4';
-import { level5 } from './level5';
-import type { LevelDefinition } from './types';
+import { CAMPAIGN } from './campaign';
+import type { LevelRecipe } from './types';
 
 /** Campaign order; each level unlocks the next. */
-export const LEVELS: readonly LevelDefinition[] = [level1, level2, level3, level4, level5];
+export const LEVELS: readonly LevelRecipe[] = CAMPAIGN;
 
-export const findLevel = (id: number): LevelDefinition | undefined =>
+export const findLevel = (id: number): LevelRecipe | undefined =>
   LEVELS.find((level) => level.id === id);
+
+/** A fresh seed for each attempt, so no two runs are the same. */
+export const randomSeed = (): number => Math.floor(Math.random() * 2 ** 31);

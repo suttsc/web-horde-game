@@ -1,10 +1,14 @@
 import type { GameStats } from '../game/Game';
 
+export const STARS_PER_LEVEL = 3;
+
 export interface LevelRecord {
   kills: number;
   peakUnits: number;
   /** Fastest clear, in seconds. */
   time: number;
+  /** Stars ever earned on this level; once earned, a star is kept. */
+  stars: boolean[];
 }
 
 export interface Progress {
@@ -44,8 +48,15 @@ export class ProgressStore {
       : 'locked';
   }
 
+  get totalStars(): number {
+    return Object.values(this.progress.best).reduce(
+      (sum, record) => sum + record.stars.filter(Boolean).length,
+      0,
+    );
+  }
+
   /** Records a clear and returns whether it set a new best time. */
-  complete(levelId: number, stats: GameStats): boolean {
+  complete(levelId: number, stats: GameStats, stars: readonly boolean[]): boolean {
     if (!this.progress.completed.includes(levelId)) this.progress.completed.push(levelId);
 
     const previous = this.progress.best[levelId];
@@ -54,6 +65,10 @@ export class ProgressStore {
       kills: Math.max(previous?.kills ?? 0, stats.kills),
       peakUnits: Math.max(previous?.peakUnits ?? 0, stats.peakUnits),
       time: isBest ? stats.time : (previous?.time ?? stats.time),
+      stars: Array.from(
+        { length: STARS_PER_LEVEL },
+        (_, i) => Boolean(previous?.stars[i]) || Boolean(stars[i]),
+      ),
     };
     this.save();
     return isBest;
@@ -77,7 +92,7 @@ export class ProgressStore {
         completed: Array.isArray(parsed.completed)
           ? parsed.completed.filter((id): id is number => typeof id === 'number')
           : [],
-        best: parsed.best && typeof parsed.best === 'object' ? parsed.best : {},
+        best: normaliseBest(parsed.best),
       };
     } catch {
       return empty();
@@ -92,6 +107,25 @@ export class ProgressStore {
     }
   }
 }
+
+/** Fills in fields added after a record was saved (older saves have no stars). */
+const normaliseBest = (best: unknown): Record<number, LevelRecord> => {
+  if (!best || typeof best !== 'object') return {};
+  const records: Record<number, LevelRecord> = {};
+  for (const [id, value] of Object.entries(best as Record<string, Partial<LevelRecord>>)) {
+    if (!value || typeof value !== 'object') continue;
+    records[Number(id)] = {
+      kills: value.kills ?? 0,
+      peakUnits: value.peakUnits ?? 0,
+      time: value.time ?? 0,
+      // A record exists only for cleared levels, so the first star is always earned.
+      stars: Array.from({ length: STARS_PER_LEVEL }, (_, i) =>
+        i === 0 ? true : Boolean(value.stars?.[i]),
+      ),
+    };
+  }
+  return records;
+};
 
 /** Resolves localStorage defensively (it can throw in private mode). */
 export const browserStorage = (): KeyValueStore | null => {

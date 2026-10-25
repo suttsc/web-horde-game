@@ -14,6 +14,8 @@ export interface Gate extends GateSpec {
 }
 
 export interface GatePair {
+  /** Unique per run, so a bullet charges each pair only once as it passes through. */
+  id: number;
   y: number;
   left: Gate;
   right: Gate;
@@ -74,7 +76,43 @@ export interface Bullet {
   vx: number;
   vy: number;
   damage: number;
+  /** Zombies this bullet can still pass through (Piercing perk). */
+  pierce: number;
+  /** Last zombie hit, so a piercing bullet doesn't hit it twice. */
+  lastHit: Zombie | null;
+  /** Id of the last gate pair charged. */
+  lastGate: number;
   dead: boolean;
+}
+
+/** Lobbed by the Grenadier perk; explodes on landing. */
+export interface Grenade {
+  fromX: number;
+  fromY: number;
+  x: number;
+  y: number;
+  /** 0..1 flight progress. */
+  t: number;
+  damage: number;
+}
+
+/** Burning ground left by Incendiary kills. */
+export interface FirePatch {
+  x: number;
+  y: number;
+  r: number;
+  life: number;
+  maxLife: number;
+  dps: number;
+}
+
+/** Visual-only tracer for the Overwatch sniper. */
+export interface Tracer {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  life: number;
 }
 
 export interface Squad {

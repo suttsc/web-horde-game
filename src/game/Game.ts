@@ -4,7 +4,9 @@ import { applyGate, chargeGate, gateLabel, isBeneficial } from './gates';
 import { Juice } from './juice';
 import { circleRectOverlap, circlesOverlap, clamp, damp } from './math';
 import { PALETTE } from './palette';
+import { PERKS, rollPerks, type PerkId, type PerkStacks } from './perks';
 import { createRng, range, type Rng } from './rng';
+import { SupportFire } from './support';
 import {
   BOSS,
   CRATE,
@@ -13,6 +15,7 @@ import {
   MAX_DECALS,
   MAX_VIEW_HEIGHT,
   MIN_VIEW_HEIGHT,
+  PERK,
   ROAD_CENTER,
   ROAD_LEFT,
   ROAD_RIGHT,
@@ -44,12 +47,29 @@ export interface GameStats {
   kills: number;
   peakUnits: number;
   time: number;
+  /** Squad size when the run ended. */
+  finalUnits: number;
+  /** Harmful gates walked through. */
+  badGates: number;
+  /** Seconds from the boss appearing to its death; null if it never died. */
+  bossSeconds: number | null;
 }
 
 export interface GameListeners {
   onStatus?: (status: GameStatus, stats: GameStats) => void;
   onBanner?: (text: string) => void;
+  /** The game pauses until `choosePerk` is called with one of `choices`. */
+  onPerkChoice?: (choices: PerkId[], stacks: Readonly<PerkStacks>, wave: number) => void;
 }
+
+const emptyStats = (): GameStats => ({
+  kills: 0,
+  peakUnits: SQUAD.startUnits,
+  time: 0,
+  finalUnits: SQUAD.startUnits,
+  badGates: 0,
+  bossSeconds: null,
+});
 
 const UPGRADE_LABELS: Record<UpgradeKind, string> = {
   fireRate: 'FIRE RATE UP',
@@ -72,9 +92,13 @@ export class Game {
   gates: GatePair[] = [];
   boss: Boss | null = null;
   decals: Decal[] = [];
-  stats: GameStats = { kills: 0, peakUnits: 0, time: 0 };
+  stats: GameStats = emptyStats();
+  perks: PerkStacks = {};
+  /** Perks on offer while the game is paused for a pick. */
+  perkChoices: PerkId[] | null = null;
 
   juice: Juice;
+  support!: SupportFire;
   formation: Vec2[] = [];
 
   private rng: Rng;
@@ -84,6 +108,10 @@ export class Game {
   private slowMo = 0;
   private endTimer = 0;
   private pendingStatus: GameStatus | null = null;
+  private nextGateId = 0;
+  private wave = 1;
+  private medicTimer = 0;
+  private bossSpawnedAt = 0;
 
   constructor(
     private level: LevelDefinition,
@@ -115,6 +143,12 @@ export class Game {
   get progress(): number {
     if (this.boss) return 1;
     return clamp(this.elapsed / this.bossAt, 0, 1);
+  }
+
+  /** Damage one full squad volley deals; support perks scale from it. */
+  get volleyDamage(): number {
+    const squad = this.squad;
+    return WEAPON.baseDamage * (1 + WEAPON.damageBonus * squad.damageLevel) * squad.units;
   }
 
   setViewHeight(height: number): void {
@@ -156,7 +190,49 @@ export class Game {
     this.slowMo = 0;
     this.endTimer = 0;
     this.pendingStatus = null;
-    this.stats = { kills: 0, peakUnits: SQUAD.startUnits, time: 0 };
+    this.stats = emptyStats();
+    this.perks = {};
+    this.perkChoices = null;
+    this.nextGateId = 0;
+    this.wave = 1;
+    this.medicTimer = 0;
+    this.bossSpawnedAt = 0;
+    this.support = new SupportFire(this.juice, this.rng, {
+      damageZombie: (zombie, damage, knockback) => this.damageZombie(zombie, damage, knockback),
+      damageBoss: (damage, x, y) => this.damageBoss(damage, x, y),
+      scorch: (x, y, radius) => this.addDecal(x, y, radius, '#14110d'),
+    });
+  }
+
+  /** Applies the chosen perk and resumes play. */
+  choosePerk(id: PerkId): void {
+    if (!this.perkChoices?.includes(id)) return;
+    this.perkChoices = null;
+    this.perks[id] = (this.perks[id] ?? 0) + 1;
+
+    const squad = this.squad;
+    switch (id) {
+      case 'drill':
+        this.applyUpgrade('fireRate', 1);
+        break;
+      case 'hollowPoints':
+        this.applyUpgrade('damage', 1);
+        break;
+      case 'reinforcements': {
+        const { base, perWave } = PERK.reinforcements;
+        this.applyUpgrade('units', base + perWave * this.wave);
+        break;
+      }
+      default:
+        break;
+    }
+    this.juice.float(
+      squad.x,
+      squad.y - this.squadRadius - 30,
+      PERKS[id].name.toUpperCase(),
+      PALETTE.muzzle,
+      18,
+    );
   }
 
   /** Advance the simulation. `steer` is drag distance, `keyAxis` is -1..1. */
@@ -165,7 +241,7 @@ export class Game {
     this.slowMo = Math.max(0, this.slowMo - rawDt);
     this.juice.update(dt);
 
-    if (this.status !== 'playing') return;
+    if (this.status !== 'playing' || this.perkChoices) return;
 
     this.scroll += SCROLL_SPEED * dt;
     this.elapsed += dt;
@@ -180,6 +256,8 @@ export class Game {
     this.updateZombies(dt);
     this.separateZombies();
     this.updateBoss(dt);
+    this.support.update(dt, this, this.perks, this.volleyDamage);
+    this.updateMedic(dt);
     this.resolveBulletHits();
     this.cleanup();
 
@@ -192,6 +270,7 @@ export class Game {
   private setStatus(status: GameStatus): void {
     this.status = status;
     this.stats.time = this.elapsed;
+    this.stats.finalUnits = this.squad.units;
     this.listeners.onStatus?.(status, this.stats);
   }
 
@@ -236,7 +315,15 @@ export class Game {
       case 'horde':
         this.spawnHorde(event.count, event.hp, event.mix ?? { walker: 1 }, event.x, event.spread);
         break;
+      case 'perk':
+        // Pick an upgrade between waves; skipped if the run is already over.
+        if (this.pendingStatus) break;
+        this.wave = event.wave;
+        this.perkChoices = rollPerks(this.perks, this.rng);
+        this.listeners.onPerkChoice?.(this.perkChoices, this.perks, event.wave);
+        break;
       case 'boss':
+        this.bossSpawnedAt = this.elapsed;
         this.boss = {
           x: ROAD_CENTER,
           y: -BOSS.radius * 1.5,
@@ -261,6 +348,7 @@ export class Game {
       flash: 0,
     });
     return {
+      id: this.nextGateId++,
       y: -GATE.height,
       left: gate(left, ROAD_LEFT, ROAD_CENTER),
       right: gate(right, ROAD_CENTER, ROAD_RIGHT),
@@ -377,8 +465,8 @@ export class Game {
   private fireVolley(): void {
     const squad = this.squad;
     const shooters = Math.min(squad.units, SQUAD.maxShooters);
-    const damage =
-      (WEAPON.baseDamage * (1 + WEAPON.damageBonus * squad.damageLevel) * squad.units) / shooters;
+    const damage = this.volleyDamage / shooters;
+    const pierce = (this.perks.piercing ?? 0) * PERK.piercePerStack;
     squad.muzzle = 0.05;
     this.juice.casing(squad.x + range(this.rng, -6, 6), squad.y, PALETTE.brass);
 
@@ -395,6 +483,9 @@ export class Game {
           vx: Math.sin(angle) * WEAPON.bulletSpeed,
           vy: -Math.cos(angle) * WEAPON.bulletSpeed,
           damage,
+          pierce,
+          lastHit: null,
+          lastGate: -1,
           dead: false,
         });
       }
@@ -414,6 +505,17 @@ export class Game {
       this.juice.shake(1);
       this.finish('lost');
     }
+  }
+
+  private updateMedic(dt: number): void {
+    const stacks = this.perks.medic ?? 0;
+    if (stacks === 0 || this.squad.units <= 0) return;
+    this.medicTimer += dt;
+    const interval = PERK.medicInterval / stacks;
+    if (this.medicTimer < interval) return;
+    this.medicTimer -= interval;
+    this.setUnits(Math.min(SQUAD.maxUnits, this.squad.units + 1));
+    this.juice.float(this.squad.x + 18, this.squad.y - this.squadRadius, '+1', '#84cc16', 14);
   }
 
   private setUnits(units: number): void {
@@ -446,6 +548,7 @@ export class Game {
       const before = squad.units;
       const after = applyGate(before, gate);
       const good = isBeneficial(gate);
+      if (!good) this.stats.badGates++;
       this.setUnits(after);
       this.juice.float(
         squad.x,
@@ -523,7 +626,13 @@ export class Game {
         continue;
       }
 
-      this.loseUnits(zombie.damage, zombie.x, zombie.y);
+      const armor = (this.perks.armor ?? 0) * PERK.armorChance;
+      if (armor > 0 && this.rng() < armor) {
+        this.juice.float(zombie.x, zombie.y - 10, 'BLOCKED', '#a8a29e', 12);
+        this.juice.burst(zombie.x, zombie.y, '#a8a29e', 6, 100, 2);
+      } else {
+        this.loseUnits(zombie.damage, zombie.x, zombie.y);
+      }
       if (zombie.kind === 'brute') {
         // Brutes shrug it off, stagger back, and come again.
         zombie.y -= ZOMBIE.bruteKnockback;
@@ -601,24 +710,50 @@ export class Game {
 
   private resolveBulletHits(): void {
     const volleyShare = 1 / Math.max(1, Math.min(this.squad.units, SQUAD.maxShooters));
+    const r = WEAPON.bulletRadius;
 
     for (const bullet of this.bullets) {
       if (bullet.dead) continue;
-      const r = WEAPON.bulletRadius;
+
+      // Gates don't stop bullets: each one charges a gate once on its way through.
+      for (const pair of this.gates) {
+        if (
+          pair.passed ||
+          bullet.lastGate === pair.id ||
+          Math.abs(bullet.y - pair.y) > GATE.height / 2
+        ) {
+          continue;
+        }
+        bullet.lastGate = pair.id;
+        const gate = bullet.x < ROAD_CENTER ? pair.left : pair.right;
+        gate.flash = 0.06;
+        if (chargeGate(gate, volleyShare)) {
+          this.juice.burst(bullet.x, pair.y, PALETTE.bullet, 3, 80, 2);
+        }
+      }
 
       const boss = this.boss;
       if (boss && !boss.dead && circlesOverlap(bullet.x, bullet.y, r, boss.x, boss.y, boss.r)) {
         bullet.dead = true;
-        this.damageBoss(boss, bullet);
+        this.damageBoss(bullet.damage, bullet.x, bullet.y);
         continue;
       }
 
       for (const zombie of this.zombies) {
-        if (zombie.dead || !circlesOverlap(bullet.x, bullet.y, r, zombie.x, zombie.y, zombie.r)) {
+        if (
+          zombie.dead ||
+          zombie === bullet.lastHit ||
+          !circlesOverlap(bullet.x, bullet.y, r, zombie.x, zombie.y, zombie.r)
+        ) {
           continue;
         }
-        bullet.dead = true;
         this.damageZombie(zombie, bullet.damage);
+        if (bullet.pierce > 0) {
+          bullet.pierce--;
+          bullet.lastHit = zombie;
+        } else {
+          bullet.dead = true;
+        }
         break;
       }
       if (bullet.dead) continue;
@@ -642,26 +777,14 @@ export class Game {
         this.damageCrate(crate, bullet.damage);
         break;
       }
-      if (bullet.dead) continue;
-
-      for (const pair of this.gates) {
-        if (pair.passed || Math.abs(bullet.y - pair.y) > GATE.height / 2) continue;
-        const gate = bullet.x < ROAD_CENTER ? pair.left : pair.right;
-        bullet.dead = true;
-        gate.flash = 0.06;
-        if (chargeGate(gate, volleyShare)) {
-          this.juice.burst(bullet.x, pair.y, PALETTE.bullet, 3, 80, 2);
-        }
-        break;
-      }
     }
   }
 
-  private damageZombie(zombie: Zombie, damage: number): void {
+  private damageZombie(zombie: Zombie, damage: number, knockback = true): void {
     if (zombie.dead) return;
     zombie.hp -= damage;
     zombie.flash = 0.08;
-    zombie.y -= zombie.kind === 'brute' ? 0.4 : 1.5;
+    if (knockback) zombie.y -= zombie.kind === 'brute' ? 0.4 : 1.5;
     if (zombie.hp <= 0) this.killZombie(zombie);
   }
 
@@ -669,6 +792,10 @@ export class Game {
     zombie.dead = true;
     this.stats.kills++;
     const { x, y, r } = zombie;
+    const incendiary = this.perks.incendiary ?? 0;
+    if (incendiary > 0 && !this.pendingStatus) {
+      this.support.ignite(x, y, incendiary, this.volleyDamage);
+    }
 
     if (zombie.kind === 'bloater') {
       this.juice.burst(x, y, PALETTE.bile, 26, 200, 4);
@@ -705,21 +832,26 @@ export class Game {
     if (crate.hp > 0) return;
 
     crate.dead = true;
-    this.applyUpgrade(crate.upgrade, crate.amount);
+    const scavenger = (this.perks.scavenger ?? 0) > 0;
+    this.applyUpgrade(crate.upgrade, crate.amount * (scavenger ? 2 : 1));
+    if (scavenger) this.applyUpgrade('units', PERK.scavengerBonusUnits);
     this.juice.burst(crate.x, crate.y, PALETTE.crate, 22, 180, 4);
     this.juice.burst(crate.x, crate.y, PALETTE.muzzle, 14, 220, 3);
     this.juice.float(crate.x, crate.y, UPGRADE_LABELS[crate.upgrade], PALETTE.muzzle, 18);
     this.juice.shake(0.3);
   }
 
-  private damageBoss(boss: Boss, bullet: Bullet): void {
-    boss.hp -= bullet.damage;
+  private damageBoss(damage: number, x: number, y: number): void {
+    const boss = this.boss;
+    if (!boss || boss.dead) return;
+    boss.hp -= damage;
     boss.flash = 0.05;
-    if (this.rng() < 0.2) this.juice.burst(bullet.x, bullet.y, PALETTE.blood, 2, 90);
+    if (this.rng() < 0.2) this.juice.burst(x, y, PALETTE.blood, 2, 90);
     if (boss.hp > 0) return;
 
     boss.dead = true;
     this.stats.kills++;
+    this.stats.bossSeconds = this.elapsed - this.bossSpawnedAt;
     this.slowMo = JUICE.bossSlowMoDuration;
     this.juice.burst(boss.x, boss.y, PALETTE.blood, 70, 280, 5);
     this.juice.burst(boss.x, boss.y, PALETTE.gore, 40, 220, 6);

@@ -5,9 +5,11 @@ import { Game } from './game/Game';
 import { DragInput } from './game/input';
 import { DISPLAY_FONT, render, type Viewport } from './game/render';
 import { MAX_VIEW_HEIGHT, MIN_VIEW_HEIGHT, WORLD_WIDTH } from './game/tuning';
-import { LEVELS, findLevel } from './levels';
-import type { LevelDefinition } from './levels/types';
-import { ProgressStore, browserStorage } from './progress/progress';
+import { LEVELS, findLevel, randomSeed } from './levels';
+import { generateLevel } from './levels/generate';
+import { earnStars, starGoals } from './levels/stars';
+import type { LevelRecipe } from './levels/types';
+import { ProgressStore, STARS_PER_LEVEL, browserStorage } from './progress/progress';
 import { Overlay } from './ui/overlay';
 
 const FIXED_STEP = 1 / 60;
@@ -20,25 +22,36 @@ if (!context) throw new Error('Canvas 2D is not supported');
 const ctx: CanvasRenderingContext2D = context;
 
 const progress = new ProgressStore(browserStorage());
-let currentLevel: LevelDefinition = LEVELS[0] as LevelDefinition;
+let currentLevel: LevelRecipe = LEVELS[0] as LevelRecipe;
 
 const openMap = (): void =>
   overlay.showMap(
-    LEVELS.map((level) => ({ level, state: progress.stateOf(level.id, LEVEL_IDS) })),
-    progress.snapshot,
+    LEVELS.map((level) => ({
+      level,
+      state: progress.stateOf(level.id, LEVEL_IDS),
+      stars: progress.snapshot.best[level.id]?.stars ?? Array<boolean>(STARS_PER_LEVEL).fill(false),
+    })),
+    progress.totalStars,
   );
 
-const play = (level: LevelDefinition): void => {
+/** Every attempt, retries included, gets a freshly generated layout. */
+const play = (level: LevelRecipe): void => {
   if (progress.stateOf(level.id, LEVEL_IDS) === 'locked') return;
   currentLevel = level;
   overlay.setLevel(level);
-  game.start(level);
+  overlay.updatePerks({});
+  game.start(generateLevel(level, randomSeed()));
 };
 
 const overlay = new Overlay({
   onSelectLevel: (id) => {
     const level = findLevel(id);
     if (level) play(level);
+  },
+  onSelectPerk: (perk) => {
+    game.choosePerk(perk);
+    overlay.hidePerks();
+    overlay.updatePerks(game.perks);
   },
   onAction: (action) => {
     switch (action) {
@@ -64,7 +77,7 @@ const overlay = new Overlay({
   },
 });
 
-const game = new Game(currentLevel, {
+const game = new Game(generateLevel(currentLevel, randomSeed()), {
   onStatus: (status, stats) => {
     if (status === 'playing') {
       overlay.showScreen('playing');
@@ -73,15 +86,24 @@ const game = new Game(currentLevel, {
     if (status !== 'won' && status !== 'lost') return;
 
     const won = status === 'won';
-    const newBest = won ? progress.complete(currentLevel.id, stats) : false;
+    const stars = earnStars(currentLevel, stats, won);
+    const newBest = won ? progress.complete(currentLevel.id, stats, stars) : false;
+    const goals = starGoals(currentLevel);
     overlay.showResult({
       won,
       level: currentLevel,
       stats,
       hasNext: LEVELS.indexOf(currentLevel) < LEVELS.length - 1,
       newBest,
+      stars: goals.map((goal, i) => ({ goal, earned: stars[i] ?? false })),
     });
   },
+  onPerkChoice: (choices, stacks, wave) =>
+    overlay.showPerks(
+      choices,
+      stacks,
+      wave > currentLevel.waves ? 'The boss is coming' : `Wave ${wave} incoming`,
+    ),
   onBanner: (text) => overlay.showBanner(text),
 });
 
