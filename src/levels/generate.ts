@@ -31,6 +31,7 @@ export const generateLevel = (recipe: LevelRecipe, seed: number): LevelDefinitio
   const events: LevelEvent[] = [];
   const stream: StreamPhase[] = [];
   const waveLength = recipe.duration / recipe.waves;
+  let doublesOffered = 0;
 
   for (let wave = 0; wave < recipe.waves; wave++) {
     const start = wave * waveLength;
@@ -55,14 +56,16 @@ export const generateLevel = (recipe: LevelRecipe, seed: number): LevelDefinitio
     // Two gate pairs per wave: an opener and a mid-wave choice.
     const [openLeft, openRight] = gatePair(rng, recipe, wave, progress, 'opener');
     events.push({ at: start + 1, type: 'gates', left: openLeft, right: openRight });
-    const doubleRed = wave > 0 && rng() < recipe.doubleRedChance;
-    const [midLeft, midRight] = gatePair(
-      rng,
-      recipe,
-      wave,
-      progress,
-      doubleRed ? 'doubleRed' : 'choice',
-    );
+    // Guarantee one ×2 offer in the first half, so a run can't stall on bad rolls.
+    const lastDoubleWave = recipe.waves > 1 ? (wave + 1) / (recipe.waves - 1) >= 0.5 : true;
+    const role: GateRole =
+      progress < 0.5 && doublesOffered === 0 && lastDoubleWave
+        ? 'double'
+        : wave > 0 && rng() < recipe.doubleRedChance
+          ? 'doubleRed'
+          : 'choice';
+    const [midLeft, midRight] = gatePair(rng, recipe, wave, progress, role);
+    if (midLeft.op === 'mul' || midRight.op === 'mul') doublesOffered++;
     events.push({
       at: start + waveLength * range(rng, 0.5, 0.62),
       type: 'gates',
@@ -159,7 +162,7 @@ const horde = (rng: Rng, recipe: LevelRecipe, at: number, progress: number): Lev
   };
 };
 
-type GateRole = 'opener' | 'choice' | 'doubleRed';
+type GateRole = 'opener' | 'choice' | 'double' | 'doubleRed';
 
 /**
  * A pair of gates with one clearly better side, randomly placed. Openers are
@@ -187,7 +190,8 @@ const gatePair = (
         ? [add(amount(3, 5)), add(-amount(1, 3))]
         : [add(amount(2, 5)), add(-amount(2, 5))];
   } else {
-    const good = rng() < 0.45 ? mul(2) : add(amount(4, 7));
+    // ×2 only early, while it doubles a small squad; late on it would snowball.
+    const good = role === 'double' || (progress < 0.5 && rng() < 0.45) ? mul(2) : add(amount(4, 7));
     const other = rng() < 0.6 ? add(-amount(2, 5)) : add(amount(1, 3));
     pair = [good, other];
   }

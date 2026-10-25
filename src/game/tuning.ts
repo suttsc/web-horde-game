@@ -49,6 +49,8 @@ export const GATE = {
   height: 38,
   /** Full squad volleys needed to raise a +/- gate by one point. */
   volleysPerPoint: 10,
+  /** Most a gate can be raised by shooting it, so gates can't be farmed. */
+  maxRaise: 6,
   maxValue: 99,
 } as const;
 
@@ -88,6 +90,12 @@ export const ZOMBIE = {
   bloaterBlastRadius: 60,
   bloaterBlastDamage: 0.6,
   bruteKnockback: 70,
+  /**
+   * A zombie that reaches the squad kills one soldier per this much of its
+   * remaining hp (at least its kind's base damage), so leaks hurt more late on.
+   */
+  hpPerSoldier: 5,
+  maxContactDamage: 12,
 } as const;
 
 /** Max blood pools kept on the road. */

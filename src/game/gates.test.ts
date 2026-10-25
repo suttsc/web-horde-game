@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyGate, chargeGate, gateLabel, isBeneficial } from './gates';
+import { applyGate, chargeGate, gateLabel, isBeneficial, isMaxed } from './gates';
 import { GATE, SQUAD } from './tuning';
 import type { Gate } from './types';
 
@@ -9,6 +9,7 @@ const gate = (op: Gate['op'], value: number): Gate => ({
   left: 0,
   right: 100,
   charge: 0,
+  raised: 0,
   flash: 0,
 });
 
@@ -68,5 +69,13 @@ describe('chargeGate', () => {
     const g = gate('add', GATE.maxValue - 1);
     chargeGate(g, GATE.volleysPerPoint * 10);
     expect(g.value).toBe(GATE.maxValue);
+  });
+
+  it('stops rising after the shooting cap', () => {
+    const g = gate('add', 2);
+    chargeGate(g, GATE.volleysPerPoint * 50);
+    expect(g.value).toBe(2 + GATE.maxRaise);
+    expect(isMaxed(g)).toBe(true);
+    expect(chargeGate(g, GATE.volleysPerPoint * 5)).toBe(false);
   });
 });

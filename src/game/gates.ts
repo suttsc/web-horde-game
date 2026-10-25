@@ -20,14 +20,19 @@ export const gateLabel = (gate: GateSpec): string => {
  * Multiplier gates are fixed. Returns true when the displayed value changed.
  */
 export const chargeGate = (gate: Gate, amount: number): boolean => {
-  if (gate.op === 'mul') return false;
+  if (gate.op === 'mul' || isMaxed(gate)) return false;
 
   gate.charge += amount / GATE.volleysPerPoint;
   let changed = false;
-  while (gate.charge >= 1 && gate.value < GATE.maxValue) {
+  while (gate.charge >= 1 && gate.value < GATE.maxValue && !isMaxed(gate)) {
     gate.charge -= 1;
     gate.value += 1;
+    gate.raised += 1;
     changed = true;
   }
+  if (isMaxed(gate)) gate.charge = 0;
   return changed;
 };
+
+/** True once a gate has been shot up as far as it can go. */
+export const isMaxed = (gate: Gate): boolean => gate.raised >= GATE.maxRaise;

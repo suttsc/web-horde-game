@@ -10,6 +10,8 @@ export interface Gate extends GateSpec {
   right: number;
   /** Fractional progress towards the next +1 from being shot. */
   charge: number;
+  /** Points gained from being shot so far; capped at GATE.maxRaise. */
+  raised: number;
   flash: number;
 }
 

@@ -345,6 +345,7 @@ export class Game {
       left: from,
       right: to,
       charge: 0,
+      raised: 0,
       flash: 0,
     });
     return {
@@ -631,7 +632,7 @@ export class Game {
         this.juice.float(zombie.x, zombie.y - 10, 'BLOCKED', '#a8a29e', 12);
         this.juice.burst(zombie.x, zombie.y, '#a8a29e', 6, 100, 2);
       } else {
-        this.loseUnits(zombie.damage, zombie.x, zombie.y);
+        this.loseUnits(contactDamage(zombie), zombie.x, zombie.y);
       }
       if (zombie.kind === 'brute') {
         // Brutes shrug it off, stagger back, and come again.
@@ -889,5 +890,14 @@ export class Game {
     this.gates = this.gates.filter((g) => g.y < limit);
   }
 }
+
+/**
+ * Soldiers a zombie kills on reaching the squad: tougher zombies take more with
+ * them. Brutes keep their flat damage because they survive contact and return.
+ */
+export const contactDamage = (zombie: Pick<Zombie, 'kind' | 'hp' | 'damage'>): number =>
+  zombie.kind === 'brute'
+    ? zombie.damage
+    : clamp(Math.ceil(zombie.hp / ZOMBIE.hpPerSoldier), zombie.damage, ZOMBIE.maxContactDamage);
 
 const rampValue = ([from, to]: StreamPhase['rate'], t: number): number => from + (to - from) * t;

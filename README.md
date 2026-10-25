@@ -52,7 +52,11 @@ src/
   gate generosity, boss). Every attempt, retries included, generates a fresh layout from a random
   seed: gate values and sides, crate rewards and lanes, horde timing, packs and positions all vary.
 - **Gates.** Bullets pass through gates, charging each gate once on the way, so pumping a gate
-  costs you positioning, not firepower.
+  costs you positioning, not firepower. Shooting can raise a gate by at most +6 (the bar turns grey
+  when maxed). ×2 gates only appear in the first half of a level, and each level offers at least
+  one, so the squad grows early without snowballing late.
+- **Leaks hurt.** A zombie that reaches the squad kills soldiers in proportion to the health it has
+  left (capped at 12; brutes stay at their flat 6 because they keep coming back).
 - **Upgrades.** Before every wave after the first, and again before the boss, the game pauses for a
   pick of 1 from 3 random perks (piercing, incendiary, medic, grenadier, overwatch, scavenger, body
   armour, fire rate, damage, reinforcements). Most stack.
@@ -73,8 +77,8 @@ src/
 Global numbers live in `src/game/tuning.ts` (including perk strength), level shape in
 `src/levels/campaign.ts`, and layout rules in `src/levels/generate.ts`. `npm test` plays every level
 on 12 seeds with a bot that aims, picks the better gate, takes crates and focuses the boss. It must
-win at least 90% of level 1 down to 50% of level 5, and a player who never moves must lose at least
-80% of runs from level 2 on.
+win at least 90% of level 1 down to 50% of level 5, no run may peak above 160 soldiers, and a player
+who never moves must lose at least 80% of runs from level 2 on.
 
 ## Deploy
 

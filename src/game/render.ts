@@ -1,5 +1,5 @@
 import type { Game } from './Game';
-import { gateLabel, isBeneficial } from './gates';
+import { gateLabel, isBeneficial, isMaxed } from './gates';
 import { PALETTE } from './palette';
 import { createRng, range } from './rng';
 import { CRATE, GATE, ROAD_CENTER, ROAD_LEFT, ROAD_RIGHT, SQUAD, WORLD_WIDTH } from './tuning';
@@ -363,7 +363,10 @@ const drawGate = (ctx: Ctx, gate: Gate, y: number): void => {
   ctx.fillRect(left, top + 3, inner, 2);
 
   // Charge meter for gates that can be shot up.
-  if (gate.op === 'add' && gate.charge > 0) {
+  if (gate.op === 'add' && isMaxed(gate)) {
+    ctx.fillStyle = '#a8a29e';
+    ctx.fillRect(left, top + GATE.height - 3, inner, 3);
+  } else if (gate.op === 'add' && gate.charge > 0) {
     ctx.fillStyle = PALETTE.muzzle;
     ctx.fillRect(left, top + GATE.height - 3, inner * gate.charge, 3);
   }
